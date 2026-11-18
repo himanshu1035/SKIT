@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><meta content="mobile_tab" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { colors: { "on-background": "#121c2a", "on-error-container": "#93000a", "surface-container-low": "#eff4ff", "on-primary-fixed-variant": "#005236", "surface-container-highest": "#d9e3f6", "surface-container": "#e6eeff", "primary-fixed": "#6ffbbe", "outline": "#6c7a71", "surface-container-lowest": "#ffffff", "surface-bright": "#f8f9ff", "secondary": "#855300", "on-primary-container": "#00422b", "secondary-fixed": "#ffddb8", "on-secondary-fixed": "#2a1700", "error": "#ba1a1a", "on-tertiary-fixed": "#410004", "secondary-fixed-dim": "#ffb95f", "on-tertiary-container": "#79000e", "outline-variant": "#bbcabf", "primary-container": "#10b981", "surface-container-high": "#dee9fc", "on-error": "#ffffff", "inverse-on-surface": "#eaf1ff", "tertiary-fixed": "#ffdad7", "surface-tint": "#006c49", "on-secondary": "#ffffff", "on-surface-variant": "#3c4a42", "on-secondary-fixed-variant": "#653e00", "secondary-container": "#fea619", "surface": "#f8f9ff", "primary-fixed-dim": "#4edea3", "background": "#f8f9ff", "on-primary-fixed": "#002113", "on-surface": "#121c2a", "primary": "#006c49", "on-primary": "#ffffff", "on-tertiary": "#ffffff", "tertiary": "#b91a24", "inverse-surface": "#27313f", "surface-dim": "#d0dbed", "surface-variant": "#d9e3f6", "on-secondary-container": "#684000", "on-tertiary-fixed-variant": "#930013", "tertiary-container": "#ff7a73", "tertiary-fixed-dim": "#ffb3ad", "error-container": "#ffdad6", "inverse-primary": "#4edea3" }, borderRadius: { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, spacing: { "space-xs": "0.25rem", "gutter": "1rem", "space-md": "1rem", "space-lg": "1.25rem", "space-xl": "1.5rem", "space-sm": "0.5rem", "margin": "1rem" }, fontFamily: { "headline-metric": ["Inter"], "display-lg": ["Inter"], "label-micro": ["Inter"], "metadata-compact": ["Inter"], "display-lg-mobile": ["Inter"], "headline-title": ["Inter"], "body-default": ["Inter"], "label-badge": ["Inter"], "body-medium": ["Inter"] }, fontSize: { "headline-metric": ["24px", { "lineHeight": "28px", "letterSpacing": "-0.02em", "fontWeight": "700" }], "display-lg": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700" }], "label-micro": ["11px", { "lineHeight": "14px", "letterSpacing": "0.04em", "fontWeight": "700" }], "metadata-compact": ["13px", { "lineHeight": "18px", "letterSpacing": "0.01em", "fontWeight": "400" }], "display-lg-mobile": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "700" }], "headline-title": ["18px", { "lineHeight": "24px", "letterSpacing": "-0.01em", "fontWeight": "600" }], "body-default": ["15px", { "lineHeight": "22px", "letterSpacing": "0em", "fontWeight": "400" }], "label-badge": ["12px", { "lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "600" }], "body-medium": ["15px", { "lineHeight": "22px", "letterSpacing": "0em", "fontWeight": "500" }] } } } };</script><style>@layer base{html,body{width:100%;margin:0;padding:0;}body{overscroll-behavior:none;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style></head><body class="bg-background font-body-default text-on-surface flex flex-col min-h-screen"><header class="fixed top-0 w-full z-50 bg-surface/85 backdrop-blur-xl pt-safe shadow-[0_1px_8px_rgba(0,0,0,0.03)]"><div class="h-16 px-margin flex items-center justify-between"><div class="flex items-center gap-space-sm"><div class="w-9 h-9 rounded-xl bg-primary-container/20 flex items-center justify-center"><span class="material-symbols-outlined text-primary text-[22px]">inventory_2</span></div><h1 class="font-headline-title text-headline-title text-on-surface tracking-tight truncate">Dashboard</h1></div><div class="flex items-center gap-space-sm"><button aria-label="Search items" class="w-11 h-11 flex items-center justify-center rounded-full text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors"><span class="material-symbols-outlined text-[22px]">search</span></button><button aria-label="Notifications" class="w-11 h-11 flex items-center justify-center rounded-full text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors relative"><span class="material-symbols-outlined text-[22px]">notifications</span><span class="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-error"></span></button><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-sm"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></header><main class="flex-1 flex flex-col w-full pt-16 pb-24 bg-background"><div class="flex flex-col w-full px-margin pb-20 space-y-space-md">
+<!-- Store Context & Health Triage Ribbon -->
+<div class="flex items-center justify-between pt-space-xs">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="relative w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center shadow-sm flex-shrink-0">
+<span class="material-symbols-outlined text-primary text-[24px]">storefront</span>
+<span class="absolute bottom-0 right-0 w-3 h-3 bg-primary-container rounded-full ring-2 ring-surface"></span>
+</div>
+<div class="min-w-0">
+<h2 class="font-headline-title text-headline-title text-on-surface truncate">Gupta General Store</h2>
+<div class="flex items-center gap-1.5 mt-0.5">
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary-fixed/30 text-on-primary-fixed-variant font-label-micro text-label-micro">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+            Stock Healthy
+          </span>
+<span class="font-metadata-compact text-metadata-compact text-on-surface-variant truncate">Sector 14</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-1 flex-shrink-0">
+<button aria-label="Shift Switcher" class="w-10 h-10 rounded-full flex items-center justify-center bg-surface-container-lowest text-on-surface-variant shadow-sm active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-[20px]">sync_alt</span>
+</button>
+</div>
+</div>
+<!-- Operational Metrics Ticker (Bento Quick Glance) -->
+<div class="grid grid-cols-3 gap-space-sm">
+<!-- Total Active -->
+<div class="bg-surface-container-lowest rounded-xl p-space-sm shadow-sm flex flex-col justify-between">
+<span class="font-label-micro text-label-micro text-on-surface-variant uppercase tracking-wider">Active</span>
+<div class="mt-2 flex items-baseline gap-1">
+<span class="font-headline-metric text-headline-metric text-on-surface" id="stat-active-skus">420</span>
+</div>
+<div class="mt-1 flex items-center text-on-surface-variant font-label-micro text-label-micro">
+<span class="material-symbols-outlined text-[14px] text-primary">inventory_2</span>
+<span class="ml-0.5 truncate">SKUs Live</span>
+</div>
+</div>
+<!-- Expiring Soon -->
+<div class="bg-surface-container-lowest rounded-xl p-space-sm shadow-sm flex flex-col justify-between relative overflow-hidden">
+<div class="absolute -right-3 -top-3 w-10 h-10 rounded-full bg-secondary-fixed/40 pointer-events-none"></div>
+<span class="font-label-micro text-label-micro text-secondary font-bold uppercase tracking-wider">FEFO Alert</span>
+<div class="mt-2 flex items-baseline gap-1">
+<span class="font-headline-metric text-headline-metric text-secondary-container" id="stat-fefo-count">12</span>
+</div>
+<div class="mt-1 flex items-center text-secondary font-label-micro text-label-micro">
+<span class="material-symbols-outlined text-[14px]">timer</span>
+<span class="ml-0.5 truncate">≤7 days</span>
+</div>
+</div>
+<!-- Loss Averted / Money Saved -->
+<div class="bg-surface-container-lowest rounded-xl p-space-sm shadow-sm flex flex-col justify-between">
+<span class="font-label-micro text-label-micro text-primary-container font-bold uppercase tracking-wider">Saved</span>
+<div class="mt-2 flex items-baseline">
+<span class="font-headline-metric text-headline-metric text-primary truncate">₹2,450</span>
+</div>
+<div class="mt-1 flex items-center text-primary font-label-micro text-label-micro">
+<span class="material-symbols-outlined text-[14px]">trending_up</span>
+<span class="ml-0.5 truncate">+14% FEFO</span>
+</div>
+</div>
+</div>
+<!-- Priority Queue Section Header -->
+<div class="flex items-center justify-between pt-1">
+<div class="flex items-center gap-2">
+<h3 class="font-headline-title text-headline-title text-on-surface tracking-tight">Action Required</h3>
+<span class="px-2 py-0.5 rounded-full bg-error-container text-on-error-container font-label-badge text-label-badge font-bold" id="action-items-count">4 items</span>
+</div>
+<button class="font-label-badge text-label-badge text-primary font-bold flex items-center gap-0.5 hover:underline">
+      View All <span class="material-symbols-outlined text-[16px]">chevron_right</span>
+</button>
+</div>
+<!-- Perishable Items Action Deck (FEFO Sequence) -->
+<div class="flex flex-col gap-space-sm" id="action-queue">
+<!-- Item 1: Amul Taaza Milk -->
+<div class="bg-surface-container-lowest rounded-xl p-space-md shadow-sm transition-all duration-200" id="card-item-1">
+<div class="flex gap-space-md items-start">
+<div class="relative w-16 h-16 rounded-xl overflow-hidden bg-surface-container-low flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="A clean top-down photographic packshot of an authentic blue and white Amul Taaza homogenized toned milk 500ml pouch on a clean minimal reflective studio surface with subtle dairy condensation droplets in soft natural ambient light" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAn9wUU-e6prC4R6B19O3pnoRSSqQMq-lPTYeMWrZUx39lRiQsddMk7IGYpjWFEPU-VsmuwUhqi31VxWWrfvy2IJdIZXAUjsuCyn1TlaWfmYg2wmj9ghznhb8797e6h5nLR5-FqXvHdkiJVTLVFuVzd0wzC7viBRRWzYYAxYmS95Nrt_89EUWe2ENT2rlYzwPmlK8tJLTkU-a_Q3_ULvjG5mqWzM3xiuPCSwKikSbA"/>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex items-start justify-between gap-1">
+<h4 class="font-body-medium text-body-medium text-on-surface truncate">Amul Taaza Milk 500ml</h4>
+<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed font-label-badge text-label-badge whitespace-nowrap">
+              Expires in 3 Days
+            </span>
+</div>
+<p class="font-metadata-compact text-metadata-compact text-on-surface-variant mt-0.5" id="item-batch-info-1">Batch #BT-8821 • <span id="item-stock-count-1">8</span> pouches</p>
+<!-- Quick Micro-Interaction Buttons -->
+<div class="mt-3 flex items-center gap-2">
+<button class="flex-1 h-9 rounded-lg bg-primary-container text-on-primary font-label-badge text-label-badge flex items-center justify-center gap-1 active:scale-95 transition-transform shadow-sm font-medium" onclick="openSoldModal(1, 'Amul Taaza Milk 500ml', 8, 'pouches')">
+<span class="material-symbols-outlined text-[16px]">sell</span>
+              Item Sold
+            </button>
+<button class="px-2.5 h-9 rounded-lg bg-surface-container-high text-on-surface font-label-badge text-label-badge flex items-center justify-center gap-1 active:scale-95 transition-transform" onclick="markAction(1, '20% Applied')">
+<span class="material-symbols-outlined text-[15px] text-primary">percent</span>
+              20% Off
+            </button>
+<button aria-label="Discard Batch" class="w-9 h-9 rounded-lg bg-surface-container-low text-on-surface-variant flex items-center justify-center active:scale-95 transition-transform hover:text-error" onclick="dismissCard(1)">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Item 2: Britannia Brown Bread -->
+<div class="bg-surface-container-lowest rounded-xl p-space-md shadow-sm transition-all duration-200" id="card-item-2">
+<div class="flex gap-space-md items-start">
+<div class="relative w-16 h-16 rounded-xl overflow-hidden bg-surface-container-low flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="A commercial photographic close-up shot of a Britannia 100 percent whole wheat brown bread loaf pack with green and amber branding sitting in a modern clean grocery display rack under crisp neutral lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAmsSPfMkd0UUg7g3qacMaDxmrvuxTPGJp1pQv-6BJg4b0e-qLcdFyEU3ycEaLQhhSB9Rm_O5nwVNv_DWWfm_NjWNnDa5NliJTRFdjOphAAt6ni0iPp5PADYUlaqOrfkXI0lZBNmxuJzyvMI_ef6YOG8bL5KjA_xkq8I1Gjb6KYoLTGmkt67Qq37-RHKsEXY7aJzgrHwbAjT3yuJpkicJQgW16YeAGg04ppD3YpJMg"/>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex items-start justify-between gap-1">
+<h4 class="font-body-medium text-body-medium text-on-surface truncate">Britannia Brown Bread</h4>
+<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-error-container text-on-error-container font-label-badge text-label-badge whitespace-nowrap">
+              Expires in 2 Days
+            </span>
+</div>
+<p class="font-metadata-compact text-metadata-compact text-on-surface-variant mt-0.5" id="item-batch-info-2">Batch #BT-8904 • <span id="item-stock-count-2">5</span> packs</p>
+<div class="mt-3 flex items-center gap-2">
+<button class="flex-1 h-9 rounded-lg bg-primary-container text-on-primary font-label-badge text-label-badge flex items-center justify-center gap-1 active:scale-95 transition-transform shadow-sm font-medium" onclick="openSoldModal(2, 'Britannia Brown Bread', 5, 'packs')">
+<span class="material-symbols-outlined text-[16px]">sell</span>
+              Item Sold
+            </button>
+<button class="px-2.5 h-9 rounded-lg bg-surface-container-high text-on-surface font-label-badge text-label-badge flex items-center justify-center gap-1 active:scale-95 transition-transform" onclick="markAction(2, '30% Applied')">
+<span class="material-symbols-outlined text-[15px] text-primary">percent</span>
+              30% Off
+            </button>
+<button aria-label="Quick Discard" class="w-9 h-9 rounded-lg bg-surface-container-low text-on-surface-variant flex items-center justify-center active:scale-95 transition-transform hover:text-error" onclick="dismissCard(2)">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Item 3: Mother Dairy Classic Dahi -->
+<div class="bg-surface-container-lowest rounded-xl p-space-md shadow-sm transition-all duration-200" id="card-item-3">
+<div class="flex gap-space-md items-start">
+<div class="relative w-16 h-16 rounded-xl overflow-hidden bg-surface-container-low flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="A clean studio photo of Mother Dairy classic dahi yogurt container 400g tub with rich blue foil lid seal resting on a clean light teal kitchen counter backdrop with subtle morning sunlight" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCxxJ3soEYmoJeGOEjPBcgIYUBKEYbX51uIC6vVG-a_ma9om4vrja43Za4jW-sRjj31R1SPpfgvcl7vl_GPRCIV1inFtofCsiReaDd3nKyOBeGkK0bfsQdc3_bh1kidfAl4xKeqQOkqLMmMVrnOzuU3HVghRpUo1VPiiFVib-XkSMiJcWK-qA6116GBfvZeQZjeeRFoMqyMFKtdIgOorT3UAJjv_PUJheidh-mvtSA"/>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex items-start justify-between gap-1">
+<h4 class="font-body-medium text-body-medium text-on-surface truncate">Mother Dairy Dahi 400g</h4>
+<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-badge text-label-badge whitespace-nowrap">
+              Expires in 7 Days
+            </span>
+</div>
+<p class="font-metadata-compact text-metadata-compact text-on-surface-variant mt-0.5" id="item-batch-info-3">Batch #BT-9042 • <span id="item-stock-count-3">14</span> units</p>
+<div class="mt-3 flex items-center gap-2">
+<button class="flex-1 h-9 rounded-lg bg-primary-container text-on-primary font-label-badge text-label-badge flex items-center justify-center gap-1 active:scale-95 transition-transform shadow-sm font-medium" onclick="openSoldModal(3, 'Mother Dairy Dahi 400g', 14, 'units')">
+<span class="material-symbols-outlined text-[16px]">sell</span>
+              Item Sold
+            </button>
+<button class="px-2.5 h-9 rounded-lg bg-surface-container-high text-on-surface font-label-badge text-label-badge flex items-center justify-center gap-1 active:scale-95 transition-transform" onclick="markAction(3, '15% Applied')">
+<span class="material-symbols-outlined text-[15px] text-primary">percent</span>
+              15% Off
+            </button>
+<button aria-label="Options" class="w-9 h-9 rounded-lg bg-surface-container-low text-on-surface-variant flex items-center justify-center active:scale-95 transition-transform hover:text-error" onclick="dismissCard(3)">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Item 4: Fresh Malai Paneer Block (Critical 1 Day Left) -->
+<div class="bg-surface-container-lowest rounded-xl p-space-md shadow-sm transition-all duration-200" id="card-item-4">
+<div class="flex gap-space-md items-start">
+<div class="relative w-16 h-16 rounded-xl overflow-hidden bg-surface-container-low flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="A macro studio shot of fresh cut soft organic malai paneer cottage cheese block 200g sealed in clear vacuum food pouch with mint garnish on a clean marble surface" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBbXrmFf07AoObIpuJV9T8gQYRY1jyhHY8ilVi127f6JmIZkWKwJDMGd4VGmJvHYIhXv_o8vqYCnPB0OJOsAswqv1aaN54FgZO-xFWw4x1FPbLjrUJuI9y8_rQBA1_8wOyPTAfjqrhgWJTBTJe3-4hSmderl-doQ2Dp1CAyiM14ScMuqKwsQaQGaE0VgqAaikxzbQwNFj_hAGU7F1cOuLuOZsvRTrwvld6dQJjPOzA"/>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex items-start justify-between gap-1">
+<h4 class="font-body-medium text-body-medium text-on-surface truncate">Fresh Malai Paneer 200g</h4>
+<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-error text-on-error font-label-badge text-label-badge whitespace-nowrap shadow-sm">
+              Expires Tomorrow
+            </span>
+</div>
+<p class="font-metadata-compact text-metadata-compact text-on-surface-variant mt-0.5" id="item-batch-info-4">Batch #BT-9118 • <span id="item-stock-count-4">4</span> blocks</p>
+<div class="mt-3 flex items-center gap-2">
+<button class="flex-1 h-9 rounded-lg bg-primary-container text-on-primary font-label-badge text-label-badge flex items-center justify-center gap-1 active:scale-95 transition-transform shadow-sm font-medium" onclick="openSoldModal(4, 'Fresh Malai Paneer 200g', 4, 'blocks')">
+<span class="material-symbols-outlined text-[16px]">sell</span>
+              Item Sold
+            </button>
+<button class="px-2.5 h-9 rounded-lg bg-error-container text-on-error-container font-label-badge text-label-badge flex items-center justify-center gap-0.5 active:scale-95 transition-transform" onclick="markAction(4, 'RTV Recorded')">
+<span class="material-symbols-outlined text-[15px]">delete_sweep</span>
+              RTV
+            </button>
+<button aria-label="Flash Sale" class="px-2.5 h-9 rounded-lg bg-secondary-fixed text-on-secondary-fixed font-label-badge text-label-badge flex items-center justify-center active:scale-95 transition-transform" onclick="markAction(4, '50% Flash Sale')">
+              Flash 50%
+            </button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Modal Bottom Sheet: Record Item Sold -->
+<div class="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm hidden flex items-end justify-center transition-opacity duration-300" id="sold-modal-backdrop">
+<div class="w-full max-w-lg bg-surface-container-lowest rounded-t-2xl p-space-lg shadow-2xl flex flex-col space-y-space-md transform translate-y-full transition-transform duration-300 pb-safe" id="sold-modal-sheet">
+<!-- Drag handle indicator -->
+<div class="w-12 h-1.5 bg-surface-variant rounded-full mx-auto -mt-1 mb-1"></div>
+<!-- Modal Header -->
+<div class="flex items-start justify-between">
+<div>
+<h3 class="font-headline-title text-headline-title text-on-surface font-bold">Record Item Sold</h3>
+<p class="font-metadata-compact text-metadata-compact text-on-surface-variant mt-0.5" id="modal-subtitle">
+          Amul Taaza Milk 500ml • 8 pouches available
+        </p>
+</div>
+<button class="w-8 h-8 rounded-full bg-surface-container-high text-on-surface-variant flex items-center justify-center hover:bg-surface-variant" onclick="closeSoldModal()">
+<span class="material-symbols-outlined text-[20px]">close</span>
+</button>
+</div>
+<!-- Stepper Quantity Selector -->
+<div class="bg-surface-container-low rounded-xl p-space-md flex flex-col items-center">
+<span class="font-label-micro text-label-micro text-on-surface-variant uppercase tracking-wider mb-2">Quantity Sold</span>
+<div class="flex items-center gap-4">
+<button class="w-11 h-11 rounded-full bg-surface-container-lowest shadow-sm flex items-center justify-center text-on-surface text-[20px] font-bold active:scale-90 transition-transform" id="modal-qty-minus" onclick="adjustQty(-1)">
+<span class="material-symbols-outlined">remove</span>
+</button>
+<span class="font-display-lg text-display-lg-mobile min-w-[3rem] text-center text-on-surface font-bold" id="modal-qty-value">1</span>
+<button class="w-11 h-11 rounded-full bg-surface-container-lowest shadow-sm flex items-center justify-center text-on-surface text-[20px] font-bold active:scale-90 transition-transform" id="modal-qty-plus" onclick="adjustQty(1)">
+<span class="material-symbols-outlined">add</span>
+</button>
+</div>
+<!-- Quick Chips -->
+<div class="flex items-center gap-2 mt-4">
+<button class="px-3.5 py-1 rounded-full bg-surface-container text-on-surface font-label-badge text-label-badge font-semibold hover:bg-surface-variant active:scale-95 transition-all" onclick="setQty(1)">1</button>
+<button class="px-3.5 py-1 rounded-full bg-surface-container text-on-surface font-label-badge text-label-badge font-semibold hover:bg-surface-variant active:scale-95 transition-all" onclick="setQty(2)">2</button>
+<button class="px-3.5 py-1 rounded-full bg-surface-container text-on-surface font-label-badge text-label-badge font-semibold hover:bg-surface-variant active:scale-95 transition-all" onclick="setQty(5)">5</button>
+<button class="px-3.5 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-badge text-label-badge font-semibold hover:bg-secondary-container/30 active:scale-95 transition-all" onclick="setQty('all')">All</button>
+</div>
+</div>
+<!-- Inventory Deduction Preview Note -->
+<div class="flex items-center gap-2 px-space-sm py-2 rounded-lg bg-primary-fixed/25 text-on-primary-fixed-variant font-metadata-compact text-metadata-compact">
+<span class="material-symbols-outlined text-[18px] text-primary">inventory</span>
+<span id="modal-remaining-preview">Remaining after sale: 7 pouches</span>
+</div>
+<!-- Actions CTA -->
+<div class="flex items-center gap-space-sm pt-1">
+<button class="flex-1 h-12 rounded-xl bg-surface-container-high text-on-surface font-headline-title text-[15px] font-semibold active:scale-98 transition-transform" onclick="closeSoldModal()">
+        Cancel
+      </button>
+<button class="flex-[1.8] h-12 rounded-xl bg-primary text-on-primary font-headline-title text-[15px] font-semibold shadow-md active:scale-98 transition-transform flex items-center justify-center gap-2" onclick="confirmStockDeduction()">
+<span class="material-symbols-outlined text-[20px]">check</span>
+        Confirm &amp; Deduct
+      </button>
+</div>
+</div>
+</div>
+<!-- Floating Toast Notification -->
+<div class="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-inverse-surface text-inverse-on-surface px-4 py-2.5 rounded-full shadow-lg flex items-center gap-2 font-metadata-compact text-metadata-compact opacity-0 pointer-events-none transition-all duration-300 transform -translate-y-2" id="toast-notification">
+<span class="material-symbols-outlined text-[18px] text-inverse-primary" id="toast-icon">check_circle</span>
+<span id="toast-text">Stock updated: Deducted 1 unit</span>
+</div>
+<script>
+  // Inventory state store for active items
+  const inventoryState = {
+    1: { name: 'Amul Taaza Milk 500ml', stock: 8, unit: 'pouches' },
+    2: { name: 'Britannia Brown Bread', stock: 5, unit: 'packs' },
+    3: { name: 'Mother Dairy Dahi 400g', stock: 14, unit: 'units' },
+    4: { name: 'Fresh Malai Paneer 200g', stock: 4, unit: 'blocks' }
+  };
+
+  let currentModalItem = null;
+  let currentModalQty = 1;
+
+  function openSoldModal(id, name, stock, unit) {
+    currentModalItem = id;
+    const currentStock = inventoryState[id] ? inventoryState[id].stock : stock;
+    currentModalQty = 1;
+    if (currentStock <= 0) {
+      showToast("No units left in this batch");
+      return;
+    }
+    const unitLabel = inventoryState[id] ? inventoryState[id].unit : unit;
+    
+    document.getElementById('modal-subtitle').textContent = name + ' • ' + currentStock + ' ' + unitLabel + ' available';
+    updateModalDisplay();
+
+    const backdrop = document.getElementById('sold-modal-backdrop');
+    const sheet = document.getElementById('sold-modal-sheet');
+    backdrop.classList.remove('hidden');
+    setTimeout(() => {
+      sheet.classList.remove('translate-y-full');
+    }, 10);
+  }
+
+  function closeSoldModal() {
+    const sheet = document.getElementById('sold-modal-sheet');
+    const backdrop = document.getElementById('sold-modal-backdrop');
+    sheet.classList.add('translate-y-full');
+    setTimeout(() => {
+      backdrop.classList.add('hidden');
+      currentModalItem = null;
+    }, 300);
+  }
+
+  function adjustQty(delta) {
+    if (!currentModalItem) return;
+    const maxStock = inventoryState[currentModalItem].stock;
+    const newQty = currentModalQty + delta;
+    if (newQty >= 1 && newQty <= maxStock) {
+      currentModalQty = newQty;
+      updateModalDisplay();
+    }
+  }
+
+  function setQty(val) {
+    if (!currentModalItem) return;
+    const maxStock = inventoryState[currentModalItem].stock;
+    if (val === 'all') {
+      currentModalQty = maxStock;
+    } else {
+      currentModalQty = Math.min(val, maxStock);
+    }
+    updateModalDisplay();
+  }
+
+  function updateModalDisplay() {
+    if (!currentModalItem) return;
+    const item = inventoryState[currentModalItem];
+    document.getElementById('modal-qty-value').textContent = currentModalQty;
+    const remaining = item.stock - currentModalQty;
+    document.getElementById('modal-remaining-preview').textContent = 
+      'Remaining after sale: ' + remaining + ' ' + item.unit;
+  }
+
+  function confirmStockDeduction() {
+    if (!currentModalItem) return;
+    const id = currentModalItem;
+    const item = inventoryState[id];
+    const qtyDeducted = currentModalQty;
+    
+    item.stock -= qtyDeducted;
+    
+    // Update displayed stock count
+    const countElem = document.getElementById('item-stock-count-' + id);
+    if (countElem) {
+      countElem.textContent = item.stock;
+    }
+
+    // Update active SKUs badge or ticker
+    const activeStat = document.getElementById('stat-active-skus');
+    if (activeStat) {
+      let cur = parseInt(activeStat.textContent) || 420;
+      if (item.stock === 0) {
+        activeStat.textContent = Math.max(0, cur - 1);
+      }
+    }
+
+    closeSoldModal();
+
+    if (item.stock <= 0) {
+      showToast('Stock exhausted: Sold all ' + qtyDeducted + ' ' + item.unit);
+      const card = document.getElementById('card-item-' + id);
+      if (card) {
+        card.classList.add('opacity-40', 'scale-[0.98]');
+        setTimeout(() => {
+          card.innerHTML = `
+            <div class="flex items-center justify-between py-2 text-primary font-body-medium">
+              <div class="flex items-center gap-2">
+                <span class="material-symbols-outlined text-[22px]">check_circle</span>
+                <span>Sold Out (${qtyDeducted} ${item.unit})</span>
+              </div>
+              <button onclick="restoreCard(${id})" class="text-on-surface-variant font-label-badge text-label-badge underline">Undo</button>
+            </div>
+          `;
+          card.classList.remove('opacity-40', 'scale-[0.98]');
+          card.classList.add('bg-primary-fixed/20');
+        }, 200);
+      }
+    } else {
+      showToast('Stock updated: Deducted ' + qtyDeducted + ' ' + item.unit);
+    }
+  }
+
+  function showToast(msg) {
+    const toast = document.getElementById('toast-notification');
+    const toastText = document.getElementById('toast-text');
+    toastText.textContent = msg;
+    toast.classList.remove('opacity-0', 'pointer-events-none', '-translate-y-2');
+    setTimeout(() => {
+      toast.classList.add('opacity-0', 'pointer-events-none', '-translate-y-2');
+    }, 2400);
+  }
+
+  // Backdrop click closes modal
+  document.getElementById('sold-modal-backdrop').addEventListener('click', function(e) {
+    if (e.target === this) {
+      closeSoldModal();
+    }
+  });
+
+  function markAction(id, label) {
+    const card = document.getElementById('card-item-' + id);
+    if (!card) return;
+    card.classList.add('opacity-40', 'scale-[0.98]');
+    setTimeout(() => {
+      card.innerHTML = `
+        <div class="flex items-center justify-between py-2 text-primary font-body-medium">
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-[22px]">check_circle</span>
+            <span>` + label + `</span>
+          </div>
+          <button onclick="restoreCard(` + id + `)" class="text-on-surface-variant font-label-badge text-label-badge underline">Undo</button>
+        </div>
+      `;
+      card.classList.remove('opacity-40', 'scale-[0.98]');
+      card.classList.add('bg-primary-fixed/20');
+    }, 200);
+  }
+
+  function dismissCard(id) {
+    const card = document.getElementById('card-item-' + id);
+    if (!card) return;
+    card.style.transition = 'all 0.3s ease';
+    card.style.opacity = '0';
+    card.style.transform = 'translateX(100px)';
+    setTimeout(() => {
+      card.remove();
+    }, 300);
+  }
+
+  function restoreCard(id) {
+    location.reload();
+  }
+</script></main><nav class="fixed bottom-0 w-full z-40 pb-safe bg-surface-container-lowest/90 backdrop-blur-xl shadow-[0_-2px_12px_rgba(18,28,42,0.06)]" data-active-classes="text-primary font-body-medium [&amp;&gt;div]:bg-primary-container/25 [&amp;&gt;div&gt;span]:text-primary [&amp;&gt;span]:text-primary"><div class="flex justify-around items-center h-16 px-space-xs"><a aria-current="page" class="flex flex-col items-center justify-center min-w-[56px] min-h-[48px] py-1 transition-colors group text-primary font-body-medium [&amp;&gt;div]:bg-primary-container/25 [&amp;&gt;div&gt;span]:text-primary [&amp;&gt;span]:text-primary" data-path="dashboard" href="#"><div class="px-4 py-1 rounded-full flex items-center justify-center transition-colors group-hover:bg-surface-container"><span class="material-symbols-outlined text-[24px]">store</span></div><span class="font-label-micro text-label-micro mt-0.5">Store</span></a><a class="flex flex-col items-center justify-center min-w-[56px] min-h-[48px] py-1 text-on-surface-variant transition-colors group" data-path="inventory" href="#"><div class="px-4 py-1 rounded-full flex items-center justify-center transition-colors group-hover:bg-surface-container"><span class="material-symbols-outlined text-[24px]">inventory</span></div><span class="font-label-micro text-label-micro mt-0.5">Inventory</span></a><a class="flex flex-col items-center justify-center min-w-[56px] -mt-5 group relative z-10" data-path="scan-code" href="#"><div class="w-14 h-14 rounded-full flex items-center justify-center text-white shadow-lg active:scale-95 transition-all duration-200 ring-4 ring-white" style="background: linear-gradient(135deg, #5f259f 0%, #7b2cbf 50%, #4a148c 100%); box-shadow: 0 8px 24px rgba(95, 37, 159, 0.45);"><span class="material-symbols-outlined text-[28px] text-white">qr_code_scanner</span></div><span class="font-label-micro text-label-micro mt-1 font-semibold text-on-surface-variant group-hover:text-primary transition-colors">Scan</span></a><a class="flex flex-col items-center justify-center min-w-[56px] min-h-[48px] py-1 text-on-surface-variant transition-colors group" data-path="analytics" href="#"><div class="px-4 py-1 rounded-full flex items-center justify-center transition-colors group-hover:bg-surface-container"><span class="material-symbols-outlined text-[24px]">insights</span></div><span class="font-label-micro text-label-micro mt-0.5">Analytics</span></a><a class="flex flex-col items-center justify-center min-w-[56px] min-h-[48px] py-1 text-on-surface-variant transition-colors group" data-path="settings" href="#"><div class="px-4 py-1 rounded-full flex items-center justify-center transition-colors group-hover:bg-surface-container"><span class="material-symbols-outlined text-[24px]">settings</span></div><span class="font-label-micro text-label-micro mt-0.5">Settings</span></a></div></nav>
+</body></html>
