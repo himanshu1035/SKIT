@@ -1,0 +1,26 @@
+{
+  "name": "skit-inventory-app",
+  "version": "2.4.0",
+  "description": "Smart Kariyana Inventory Technology (SKIT) - Automated, real-time localized inventory tracking and freshness management PWA for micro-retailers",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx serve . -l 3000",
+    "dev": "npx serve . -l 3000",
+    "build": "echo 'SKIT PWA static build ready for Vercel deployment'"
+  },
+  "keywords": [
+    "pwa",
+    "kirana",
+    "inventory-management",
+    "fefo",
+    "freshness-alert",
+    "ocr",
+    "supabase",
+    "mobile-first"
+  ],
+  "author": "Himanshu Jhuria",
+  "license": "MIT",
+  "devDependencies": {
+    "serve": "^14.2.4"
+  }
+}

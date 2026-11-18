@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#006c49"/>
+      <stop offset="100%" stop-color="#00422b"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6ffbbe"/>
+      <stop offset="100%" stop-color="#10b981"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="#000000" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="128" fill="url(#bg)"/>
+  <!-- Decorative Ring -->
+  <circle cx="256" cy="256" r="190" stroke="url(#accent)" stroke-width="4" stroke-dasharray="12 12" fill="none" opacity="0.4"/>
+  <!-- Scanner Corner Brackets -->
+  <path d="M 120 170 L 120 130 L 160 130" stroke="#6ffbbe" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <path d="M 392 170 L 392 130 L 352 130" stroke="#6ffbbe" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <path d="M 120 342 L 120 382 L 160 382" stroke="#6ffbbe" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <path d="M 392 342 L 392 382 L 352 382" stroke="#6ffbbe" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Storefront Icon Center -->
+  <g transform="translate(156, 156)" filter="url(#shadow)">
+    <!-- Awning / Canopy -->
+    <path d="M 20 60 L 180 60 L 195 90 L 5 90 Z" fill="#10b981"/>
+    <path d="M 20 60 L 60 60 L 52 90 L 12 90 Z" fill="#4edea3"/>
+    <path d="M 100 60 L 140 60 L 148 90 L 108 90 Z" fill="#4edea3"/>
+    <!-- Store Pillars & Wall -->
+    <rect x="25" y="90" width="150" height="90" fill="#ffffff" rx="8"/>
+    <!-- Doorway -->
+    <rect x="75" y="115" width="50" height="65" rx="6" fill="#006c49"/>
+    <!-- Window 1 -->
+    <rect x="38" y="115" width="26" height="35" rx="4" fill="#d9e3f6"/>
+    <!-- Window 2 -->
+    <rect x="136" y="115" width="26" height="35" rx="4" fill="#d9e3f6"/>
+    <!-- Roof Peak Sign -->
+    <path d="M 100 20 L 175 60 L 25 60 Z" fill="#ffffff"/>
+    <circle cx="100" cy="45" r="8" fill="#10b981"/>
+  </g>
+  <!-- Laser Beam -->
+  <line x1="100" y1="256" x2="412" y2="256" stroke="#6ffbbe" stroke-width="4" stroke-linecap="round" opacity="0.85"/>
+  <!-- App text mark -->
+  <text x="256" y="445" font-family="Inter, sans-serif" font-size="34" font-weight="800" fill="#ffffff" letter-spacing="4" text-anchor="middle">SKIT</text>
+</svg>
