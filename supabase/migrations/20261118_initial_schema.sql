@@ -4,6 +4,14 @@
 -- Target: Micro-Retailers & Kirana Stores (FEFO & Freshness Management)
 -- ==============================================================================
 
+-- Clean reset of existing tables to prevent "column does not exist" conflict
+DROP TABLE IF EXISTS markdown_suggestions CASCADE;
+DROP TABLE IF EXISTS alerts CASCADE;
+DROP TABLE IF EXISTS sales_adjustments CASCADE;
+DROP TABLE IF EXISTS batches CASCADE;
+DROP TABLE IF EXISTS products CASCADE;
+DROP TABLE IF EXISTS merchants CASCADE;
+
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
@@ -11,7 +19,7 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- ------------------------------------------------------------------------------
 -- 1. Merchants & Stores Table
 -- ------------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS merchants (
+CREATE TABLE merchants (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     phone VARCHAR(15) UNIQUE NOT NULL,
     pin_hash VARCHAR(255) NOT NULL,
@@ -23,12 +31,12 @@ CREATE TABLE IF NOT EXISTS merchants (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_merchants_phone ON merchants(phone);
+CREATE INDEX idx_merchants_phone ON merchants(phone);
 
 -- ------------------------------------------------------------------------------
 -- 2. Products Table (Scoped to Merchant)
 -- ------------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS products (
+CREATE TABLE products (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     merchant_id UUID REFERENCES merchants(id) ON DELETE CASCADE,
     barcode VARCHAR(64) NOT NULL,
@@ -42,14 +50,14 @@ CREATE TABLE IF NOT EXISTS products (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_products_merchant_id ON products(merchant_id);
-CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode);
-CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
+CREATE INDEX idx_products_merchant_id ON products(merchant_id);
+CREATE INDEX idx_products_barcode ON products(barcode);
+CREATE INDEX idx_products_category ON products(category);
 
 -- ------------------------------------------------------------------------------
 -- 3. Batches Table (FEFO Tracking Scoped to Merchant)
 -- ------------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS batches (
+CREATE TABLE batches (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     merchant_id UUID REFERENCES merchants(id) ON DELETE CASCADE,
     product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
@@ -59,15 +67,15 @@ CREATE TABLE IF NOT EXISTS batches (
     received_date TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_batches_merchant_id ON batches(merchant_id);
-CREATE INDEX IF NOT EXISTS idx_batches_product_id ON batches(product_id);
-CREATE INDEX IF NOT EXISTS idx_batches_expiry_date ON batches(expiry_date);
-CREATE INDEX IF NOT EXISTS idx_batches_quantity ON batches(quantity_on_hand);
+CREATE INDEX idx_batches_merchant_id ON batches(merchant_id);
+CREATE INDEX idx_batches_product_id ON batches(product_id);
+CREATE INDEX idx_batches_expiry_date ON batches(expiry_date);
+CREATE INDEX idx_batches_quantity ON batches(quantity_on_hand);
 
 -- ------------------------------------------------------------------------------
 -- 4. Sales Adjustments Table (Audit Trail)
 -- ------------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS sales_adjustments (
+CREATE TABLE sales_adjustments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     merchant_id UUID REFERENCES merchants(id) ON DELETE CASCADE,
     batch_id UUID NOT NULL REFERENCES batches(id) ON DELETE CASCADE,
@@ -77,14 +85,14 @@ CREATE TABLE IF NOT EXISTS sales_adjustments (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_sales_adjustments_merchant ON sales_adjustments(merchant_id);
-CREATE INDEX IF NOT EXISTS idx_sales_adjustments_batch_id ON sales_adjustments(batch_id);
-CREATE INDEX IF NOT EXISTS idx_sales_adjustments_created_at ON sales_adjustments(created_at);
+CREATE INDEX idx_sales_adjustments_merchant ON sales_adjustments(merchant_id);
+CREATE INDEX idx_sales_adjustments_batch_id ON sales_adjustments(batch_id);
+CREATE INDEX idx_sales_adjustments_created_at ON sales_adjustments(created_at);
 
 -- ------------------------------------------------------------------------------
 -- 5. Alerts Table (FEFO Expiry Warnings: 14d, 7d, 3d, 2d, 1d)
 -- ------------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS alerts (
+CREATE TABLE alerts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     merchant_id UUID REFERENCES merchants(id) ON DELETE CASCADE,
     batch_id UUID NOT NULL REFERENCES batches(id) ON DELETE CASCADE,
@@ -93,14 +101,14 @@ CREATE TABLE IF NOT EXISTS alerts (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_alerts_merchant ON alerts(merchant_id);
-CREATE INDEX IF NOT EXISTS idx_alerts_batch_id ON alerts(batch_id);
-CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts(status);
+CREATE INDEX idx_alerts_merchant ON alerts(merchant_id);
+CREATE INDEX idx_alerts_batch_id ON alerts(batch_id);
+CREATE INDEX idx_alerts_status ON alerts(status);
 
 -- ------------------------------------------------------------------------------
 -- 6. Markdown Suggestions Table (Margin Guard Engine)
 -- ------------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS markdown_suggestions (
+CREATE TABLE markdown_suggestions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     merchant_id UUID REFERENCES merchants(id) ON DELETE CASCADE,
     batch_id UUID NOT NULL REFERENCES batches(id) ON DELETE CASCADE,
@@ -110,13 +118,12 @@ CREATE TABLE IF NOT EXISTS markdown_suggestions (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_markdown_merchant ON markdown_suggestions(merchant_id);
-CREATE INDEX IF NOT EXISTS idx_markdown_batch_id ON markdown_suggestions(batch_id);
-CREATE INDEX IF NOT EXISTS idx_markdown_status ON markdown_suggestions(status);
+CREATE INDEX idx_markdown_merchant ON markdown_suggestions(merchant_id);
+CREATE INDEX idx_markdown_batch_id ON markdown_suggestions(batch_id);
+CREATE INDEX idx_markdown_status ON markdown_suggestions(status);
 
 -- ------------------------------------------------------------------------------
 -- 7. Row Level Security (RLS) Configuration
--- Enable public / anon access for authenticated client apps
 -- ------------------------------------------------------------------------------
 ALTER TABLE merchants ENABLE ROW LEVEL SECURITY;
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
