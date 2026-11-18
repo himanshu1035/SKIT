@@ -1,14 +1,14 @@
-const CACHE_NAME = 'skit-cache-v1';
+const CACHE_NAME = 'skit-production-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
+  '/env.js',
   '/assets/icons/icon-192.png',
   '/assets/icons/icon-512.png',
   '/assets/icons/icon.svg',
   '/assets/icons/favicon.png',
   '/assets/images/shelf_illustration.png',
-  '/assets/images/amul_butter_500g.png',
   '/assets/images/viewfinder_bg.png',
   '/js/supabase.js',
   '/js/app.js'
@@ -39,6 +39,11 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  // Do not cache API routes
+  if (event.request.url.includes('/api/')) {
+    return;
+  }
+
   // Navigation fallback to /index.html for SPA routes
   if (event.request.mode === 'navigate') {
     event.respondWith(

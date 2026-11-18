@@ -1,354 +1,93 @@
 /**
  * SKIT: Smart Kariyana Inventory Technology
- * Supabase Client & Offline-First Repository Layer
+ * Production Supabase Client & Backend-Only Data Layer
+ * 100% Scoped to Authenticated Merchant Store ID
  */
 
 (function (window) {
   'use strict';
 
-  const STORAGE_KEY_PREFIX = 'skit_';
-  const CONFIG_KEY = 'skit_supabase_config';
+  const SESSION_KEY = 'skit_production_session';
+  const LOCAL_CACHE_PREFIX = 'skit_store_';
 
   // Margin Guard minimum safety threshold: Cost + 5%
   const MARGIN_GUARD_FACTOR = 1.05;
 
-  const DEFAULT_MERCHANT = {
-    id: '00000000-0000-0000-0000-000000000001',
-    phone: '9876543210',
-    pin: '1234',
-    store_name: 'Gupta General Store',
-    location: 'Sector 14, Urban Estate',
-    currency: 'INR'
-  };
-
-  const DEFAULT_PRODUCTS = [
-    {
-      id: 'prod-1',
-      barcode: '8901260012345',
-      name: 'Amul Butter 500g',
-      category: 'Dairy / Spreads',
-      mrp: 285.0,
-      cost_price: 230.0,
-      shelf_life_days: 180,
-      image_url: 'assets/images/amul_butter_500g.png',
-      unit: 'units'
-    },
-    {
-      id: 'prod-2',
-      barcode: '8901262010012',
-      name: 'Amul Taaza Milk 500ml',
-      category: 'Dairy / Fresh Milk',
-      mrp: 27.0,
-      cost_price: 22.0,
-      shelf_life_days: 4,
-      image_url:
-        'https://lh3.googleusercontent.com/aida-public/AB6AXuAn9wUU-e6prC4R6B19O3pnoRSSqQMq-lPTYeMWrZUx39lRiQsddMk7IGYpjWFEPU-VsmuwUhqi31VxWWrfvy2IJdIZXAUjsuCyn1TlaWfmYg2wmj9ghznhb8797e6h5nLR5-FqXvHdkiJVTLVFuVzd0wzC7viBRRWzYYAxYmS95Nrt_89EUWe2ENT2rlYzwPmlK8tJLTkU-a_Q3_ULvjG5mqWzM3xiuPCSwKikSbA',
-      unit: 'pouches'
-    },
-    {
-      id: 'prod-3',
-      barcode: '8901063142104',
-      name: 'Britannia Brown Bread',
-      category: 'Bakery / Bread',
-      mrp: 50.0,
-      cost_price: 28.0,
-      shelf_life_days: 6,
-      image_url:
-        'https://lh3.googleusercontent.com/aida-public/AB6AXuAmsSPfMkd0UUg7g3qacMaDxmrvuxTPGJp1pQv-6BJg4b0e-qLcdFyEU3ycEaLQhhSB9Rm_O5nwVNv_DWWfm_NjWNnDa5NliJTRFdjOphAAt6ni0iPp5PADYUlaqOrfkXI0lZBNmxuJzyvMI_ef6YOG8bL5KjA_xkq8I1Gjb6KYoLTGmkt67Qq37-RHKsEXY7aJzgrHwbAjT3yuJpkicJQgW16YeAGg04ppD3YpJMg',
-      unit: 'packs'
-    },
-    {
-      id: 'prod-4',
-      barcode: '8901030773010',
-      name: 'Mother Dairy Dahi 400g',
-      category: 'Dairy / Yogurt',
-      mrp: 35.0,
-      cost_price: 26.0,
-      shelf_life_days: 10,
-      image_url:
-        'https://lh3.googleusercontent.com/aida-public/AB6AXuCxxJ3soEYmoJeGOEjPBcgIYUBKEYbX51uIC6vVG-a_ma9om4vrja43Za4jW-sRjj31R1SPpfgvcl7vl_GPRCIV1inFtofCsiReaDd3nKyOBeGkK0bfsQdc3_bh1kidfAl4xKeqQOkqLMmMVrnOzuU3HVghRpUo1VPiiFVib-XkSMiJcWK-qA6116GBfvZeQZjeeRFoMqyMFKtdIgOorT3UAJjv_PUJheidh-mvtSA',
-      unit: 'units'
-    },
-    {
-      id: 'prod-5',
-      barcode: '8904018300215',
-      name: 'Fresh Malai Paneer 200g',
-      category: 'Dairy / Fresh',
-      mrp: 95.0,
-      cost_price: 72.0,
-      shelf_life_days: 5,
-      image_url:
-        'https://lh3.googleusercontent.com/aida-public/AB6AXuBbXrmFf07AoObIpuJV9T8gQYRY1jyhHY8ilVi127f6JmIZkWKwJDMGd4VGmJvHYIhXv_o8vqYCnPB0OJOsAswqv1aaN54FgZO-xFWw4x1FPbLjrUJuI9y8_rQBA1_8wOyPTAfjqrhgWJTBTJe3-4hSmderl-doQ2Dp1CAyiM14ScMuqKwsQaQGaE0VgqAaikxzbQwNFj_hAGU7F1cOuLuOZsvRTrwvld6dQJjPOzA',
-      unit: 'blocks'
-    },
-    {
-      id: 'prod-6',
-      barcode: '8901058852204',
-      name: 'Nestle Milk Pack 1L',
-      category: 'Dairy / Tetra Pak',
-      mrp: 60.0,
-      cost_price: 42.0,
-      shelf_life_days: 90,
-      image_url:
-        'https://lh3.googleusercontent.com/aida-public/AB6AXuDdce9kFVmXPWA24hQuDbwBrcPD0-Xw_nSnen1iNqJ9TajgLnwwiQ5wgFiRz6dPEEHKJypCYyEziQzpNnKQxAdCoFOK20cujGatg4LJEGq4_qqqKEpGBXG07Xzo2xCECBp3xUk31TH-_VKzIudAds_uVUx_HaVqo4Oh-D34cMh6uT-wHnGLPJix_z3JA1f6VGSXdNayvaBAthF6uSd6cd5Fp4cJfQitnhlRF6jR01A',
-      unit: 'units'
-    },
-    {
-      id: 'prod-7',
-      barcode: '8906073120019',
-      name: 'Epigamia Greek Yogurt',
-      category: 'Dairy / Gourmet',
-      mrp: 60.0,
-      cost_price: 35.0,
-      shelf_life_days: 15,
-      image_url:
-        'https://lh3.googleusercontent.com/aida-public/AB6AXuD1iI15DrdxKXE43A8cMJY6RWOH-YtGXUzPWZG6KXvHwk2AoY9yhrnIjSMjt06ufmSl2lVjmjmuZUIzrFhepH4ZgDBdOzGRX8L_9MOIfw_wOlvDsKH89hvt4rJt8yeMl1Z6puWYmivtoS3c1O2tlWRF3beVbBoWECvcxbp8Y88hN2PzeAENZOyPWbJrlUVyFiCcKNqd8gF2bNyM0laCwpAT4HdTbzf4t7Iv4m9Nblk',
-      unit: 'units'
-    }
-  ];
-
-  function getDaysFromNow(days) {
-    const d = new Date();
-    d.setDate(d.getDate() + days);
-    return d.toISOString().split('T')[0];
-  }
-
-  const DEFAULT_BATCHES = [
-    {
-      id: 'batch-1',
-      product_id: 'prod-2',
-      batch_code: 'BT-8821',
-      expiry_date: getDaysFromNow(3),
-      days_left: 3,
-      quantity_on_hand: 8,
-      status: 'critical'
-    },
-    {
-      id: 'batch-2',
-      product_id: 'prod-3',
-      batch_code: 'BT-8904',
-      expiry_date: getDaysFromNow(2),
-      days_left: 2,
-      quantity_on_hand: 5,
-      status: 'critical'
-    },
-    {
-      id: 'batch-3',
-      product_id: 'prod-4',
-      batch_code: 'BT-9042',
-      expiry_date: getDaysFromNow(7),
-      days_left: 7,
-      quantity_on_hand: 14,
-      status: 'warning'
-    },
-    {
-      id: 'batch-4',
-      product_id: 'prod-5',
-      batch_code: 'BT-9118',
-      expiry_date: getDaysFromNow(1),
-      days_left: 1,
-      quantity_on_hand: 4,
-      status: 'critical'
-    },
-    {
-      id: 'batch-5',
-      product_id: 'prod-1',
-      batch_code: 'BT-4092',
-      expiry_date: getDaysFromNow(3),
-      days_left: 3,
-      quantity_on_hand: 12,
-      status: 'warning'
-    },
-    {
-      id: 'batch-6',
-      product_id: 'prod-6',
-      batch_code: 'NM-104',
-      expiry_date: getDaysFromNow(5),
-      days_left: 5,
-      quantity_on_hand: 18,
-      status: 'warning'
-    },
-    {
-      id: 'batch-7',
-      product_id: 'prod-7',
-      batch_code: 'EG-550',
-      expiry_date: getDaysFromNow(4),
-      days_left: 4,
-      quantity_on_hand: 15,
-      status: 'warning'
-    }
-  ];
-
-  const DEFAULT_MARKDOWNS = [
-    {
-      id: 'md-1',
-      batch_id: 'batch-5',
-      product_name: 'Amul Butter 500g',
-      product_image: 'assets/images/amul_butter_500g.png',
-      batch_code: 'BT-4092',
-      units: 12,
-      cost_price: 230.0,
-      mrp: 285.0,
-      days_left: 3,
-      discount_pct: 15,
-      suggested_price: 242.0,
-      unit_profit: 12.0,
-      total_profit: 144.0,
-      status: 'pending'
-    },
-    {
-      id: 'md-2',
-      batch_id: 'batch-6',
-      product_name: 'Nestle Milk Pack 1L',
-      product_image:
-        'https://lh3.googleusercontent.com/aida-public/AB6AXuDdce9kFVmXPWA24hQuDbwBrcPD0-Xw_nSnen1iNqJ9TajgLnwwiQ5wgFiRz6dPEEHKJypCYyEziQzpNnKQxAdCoFOK20cujGatg4LJEGq4_qqqKEpGBXG07Xzo2xCECBp3xUk31TH-_VKzIudAds_uVUx_HaVqo4Oh-D34cMh6uT-wHnGLPJix_z3JA1f6VGSXdNayvaBAthF6uSd6cd5Fp4cJfQitnhlRF6jR01A',
-      batch_code: 'NM-104',
-      units: 18,
-      cost_price: 42.0,
-      mrp: 60.0,
-      days_left: 5,
-      discount_pct: 20,
-      suggested_price: 48.0,
-      unit_profit: 6.0,
-      total_profit: 108.0,
-      status: 'pending'
-    },
-    {
-      id: 'md-3',
-      batch_id: 'batch-2',
-      product_name: 'Britannia 100% Bread',
-      product_image:
-        'https://lh3.googleusercontent.com/aida-public/AB6AXuDipvpXPxCxdWLJ3eWAKE7gDXg3YaOTr3wjksnThtJL5OZc7CDf6U-IRW6otEIpYaWzN3KU4B-kUaHR1DTytGFn5auZYy3D2KbCkXWfiGPNlhx5BPH-ZwuZzhBNGvCVZkg-zEqDTj4byKp9HGN7VqeDH1U_337e4OqOE0tUMh1CD0zr-8iuk6uAFhcMSYbztTpbVAiDsDtSzfcV-GgHRfF_IAmdcmjWNa23xQzMOUk',
-      batch_code: 'BR-882',
-      units: 8,
-      cost_price: 28.0,
-      mrp: 50.0,
-      days_left: 2,
-      discount_pct: 30,
-      suggested_price: 35.0,
-      unit_profit: 7.0,
-      total_profit: 56.0,
-      status: 'pending'
-    },
-    {
-      id: 'md-4',
-      batch_id: 'batch-7',
-      product_name: 'Epigamia Greek Yogurt',
-      product_image:
-        'https://lh3.googleusercontent.com/aida-public/AB6AXuD1iI15DrdxKXE43A8cMJY6RWOH-YtGXUzPWZG6KXvHwk2AoY9yhrnIjSMjt06ufmSl2lVjmjmuZUIzrFhepH4ZgDBdOzGRX8L_9MOIfw_wOlvDsKH89hvt4rJt8yeMl1Z6puWYmivtoS3c1O2tlWRF3beVbBoWECvcxbp8Y88hN2PzeAENZOyPWbJrlUVyFiCcKNqd8gF2bNyM0laCwpAT4HdTbzf4t7Iv4m9Nblk',
-      batch_code: 'EG-550',
-      units: 15,
-      cost_price: 35.0,
-      mrp: 60.0,
-      days_left: 4,
-      discount_pct: 25,
-      suggested_price: 45.0,
-      unit_profit: 10.0,
-      total_profit: 150.0,
-      status: 'pending'
-    }
-  ];
-
-  class SkitDatabase {
+  class SkitSupabaseService {
     constructor() {
+      this.supabase = null;
+      this.currentMerchant = null;
       this.listeners = [];
-      this.supabaseClient = null;
-      this.isOnline = navigator.onLine;
-      this.init();
+      this.configLoaded = false;
+      this.initPromise = this.init();
     }
 
-    init() {
-      // Setup online/offline listeners
-      window.addEventListener('online', () => {
-        this.isOnline = true;
-        this.notify('network_online');
-      });
-      window.addEventListener('offline', () => {
-        this.isOnline = false;
-        this.notify('network_offline');
-      });
+    async init() {
+      // 1. Restore authenticated merchant session if exists
+      this.restoreSession();
 
-      // Initialize storage defaults if empty
-      if (!this._get('products')) {
-        this._set('products', DEFAULT_PRODUCTS);
-      }
-      if (!this._get('batches')) {
-        this._set('batches', DEFAULT_BATCHES);
-      }
-      if (!this._get('markdowns')) {
-        this._set('markdowns', DEFAULT_MARKDOWNS);
-      }
-      if (!this._get('sales')) {
-        this._set('sales', []);
-      }
-      if (!this._get('merchant')) {
-        this._set('merchant', DEFAULT_MERCHANT);
-      }
-      if (!this._get('stats')) {
-        this._set('stats', {
-          baseActiveSkus: 420,
-          moneySaved: 2450
-        });
-      }
+      // 2. Load Supabase configuration from build-time window.__SKIT_ENV__ or /api/config serverless endpoint
+      let url = '';
+      let key = '';
 
-      this.initSupabaseClient();
-    }
-
-    initSupabaseClient() {
-      const config = this.getSupabaseConfig();
-      if (config.url && config.key && window.supabase) {
+      if (window.__SKIT_ENV__ && window.__SKIT_ENV__.supabaseUrl && window.__SKIT_ENV__.supabaseAnonKey) {
+        url = window.__SKIT_ENV__.supabaseUrl;
+        key = window.__SKIT_ENV__.supabaseAnonKey;
+      } else {
         try {
-          this.supabaseClient = window.supabase.createClient(config.url, config.key);
-          console.log('[SKIT] Supabase live client connected:', config.url);
+          const res = await fetch('/api/config', { cache: 'no-store' });
+          if (res.ok) {
+            const data = await res.json();
+            url = data.supabaseUrl || '';
+            key = data.supabaseAnonKey || '';
+          }
         } catch (e) {
-          console.warn('[SKIT] Supabase client init failed:', e);
-          this.supabaseClient = null;
+          console.warn('[SKIT Backend] /api/config fetch skipped or not available locally:', e);
         }
       }
+
+      if (url && key && window.supabase) {
+        try {
+          this.supabase = window.supabase.createClient(url, key, {
+            auth: { credentials: 'omit', persistSession: false }
+          });
+          console.log('[SKIT Production] Connected to Supabase Cloud Database:', url);
+        } catch (err) {
+          console.error('[SKIT Production] Supabase initialization failed:', err);
+        }
+      } else {
+        console.warn('[SKIT Production] No backend Supabase credentials detected yet. Operating in local-scoped merchant storage.');
+      }
+
+      this.configLoaded = true;
+      this.notify('ready', { connected: Boolean(this.supabase) });
+      return Boolean(this.supabase);
     }
 
-    getSupabaseConfig() {
+    restoreSession() {
       try {
-        const raw = localStorage.getItem(CONFIG_KEY);
-        return raw ? JSON.parse(raw) : { url: '', key: '' };
+        const raw = localStorage.getItem(SESSION_KEY);
+        if (raw) {
+          this.currentMerchant = JSON.parse(raw);
+        }
       } catch (e) {
-        return { url: '', key: '' };
+        this.currentMerchant = null;
       }
     }
 
-    setSupabaseConfig(url, key) {
-      localStorage.setItem(CONFIG_KEY, JSON.stringify({ url: url.trim(), key: key.trim() }));
-      this.initSupabaseClient();
-      this.notify('config_changed');
+    saveSession(merchant) {
+      this.currentMerchant = merchant;
+      if (merchant) {
+        localStorage.setItem(SESSION_KEY, JSON.stringify(merchant));
+      } else {
+        localStorage.removeItem(SESSION_KEY);
+      }
+      this.notify('session_changed', merchant);
     }
 
-    async testSupabaseConnection(url, key) {
-      if (!window.supabase) {
-        throw new Error('Supabase client library not loaded yet');
-      }
-      const testClient = window.supabase.createClient(url.trim(), key.trim());
-      const { data, error } = await testClient.from('products').select('count', { count: 'exact', head: true });
-      if (error) {
-        throw error;
-      }
-      return true;
-    }
-
-    _get(key) {
-      try {
-        const item = localStorage.getItem(STORAGE_KEY_PREFIX + key);
-        return item ? JSON.parse(item) : null;
-      } catch (e) {
-        return null;
-      }
-    }
-
-    _set(key, val) {
-      try {
-        localStorage.setItem(STORAGE_KEY_PREFIX + key, JSON.stringify(val));
-      } catch (e) {
-        console.error('Storage quota exceeded or error', e);
-      }
+    logout() {
+      this.saveSession(null);
+      this.notify('logged_out');
     }
 
     subscribe(fn) {
@@ -363,359 +102,591 @@
         try {
           fn(event, payload);
         } catch (e) {
-          console.error('Listener error', e);
+          console.error('[SKIT Event Error]', e);
         }
       });
     }
 
     // -------------------------------------------------------------
-    // Merchant Profile
+    // Local Scoped Fallback Helpers (Per-Merchant Isolation)
     // -------------------------------------------------------------
-    getMerchant() {
-      return this._get('merchant') || DEFAULT_MERCHANT;
+    _getStoreKey(table) {
+      const merchantId = this.currentMerchant ? this.currentMerchant.id : 'anonymous';
+      return `${LOCAL_CACHE_PREFIX}${merchantId}_${table}`;
     }
 
-    saveMerchant(data) {
-      const current = this.getMerchant();
-      const updated = { ...current, ...data };
-      this._set('merchant', updated);
-      this.notify('merchant_updated', updated);
-
-      if (this.supabaseClient) {
-        this.supabaseClient.from('merchants').upsert({
-          id: updated.id,
-          phone: updated.phone,
-          pin_hash: updated.pin,
-          store_name: updated.store_name,
-          location: updated.location
-        }).then(({ error }) => {
-          if (error) console.warn('[Supabase Sync] Merchant update error:', error);
-        });
+    _getLocal(table) {
+      try {
+        const raw = localStorage.getItem(this._getStoreKey(table));
+        return raw ? JSON.parse(raw) : [];
+      } catch (e) {
+        return [];
       }
+    }
+
+    _setLocal(table, data) {
+      try {
+        localStorage.setItem(this._getStoreKey(table), JSON.stringify(data));
+      } catch (e) {
+        console.warn('[Local Storage Quota Warning]', e);
+      }
+    }
+
+    // -------------------------------------------------------------
+    // Authentication & Merchant Registration (One-Time 1111 OTP)
+    // -------------------------------------------------------------
+
+    /**
+     * One-time OTP bypass verification for launch phase.
+     * Checks if mobile is already verified with a PIN; prevents re-registering.
+     */
+    async registerMerchantWithOTP(phone, otp, pin, storeName, location) {
+      const cleanPhone = String(phone).replace(/\D/g, '').slice(-10);
+      const cleanPin = String(pin).trim();
+      const cleanStore = String(storeName).trim() || 'My Kirana Store';
+      const cleanLoc = String(location).trim() || 'Local Market';
+
+      if (!cleanPhone || cleanPhone.length !== 10) {
+        throw new Error('Please enter a valid 10-digit mobile number.');
+      }
+      if (!cleanPin || cleanPin.length !== 4) {
+        throw new Error('PIN must be exactly 4 digits.');
+      }
+
+      // TODO: Replace temporary 1111 OTP bypass with SMS gateway provider (e.g., MSG91 / Twilio / Supabase Phone Auth)
+      if (otp !== '1111') {
+        throw new Error('Invalid OTP. Use temporary launch code 1111.');
+      }
+
+      await this.initPromise;
+
+      // 1. Check if merchant already exists in live Supabase database
+      if (this.supabase) {
+        const { data: existing, error: checkErr } = await this.supabase
+          .from('merchants')
+          .select('id, phone, otp_verified')
+          .eq('phone', cleanPhone)
+          .maybeSingle();
+
+        if (checkErr && checkErr.code !== 'PGRST116') {
+          console.warn('[Supabase Merchant Check Error]', checkErr);
+        }
+
+        if (existing && existing.otp_verified) {
+          throw new Error('Mobile number already registered! Please log in with your 4-digit PIN.');
+        }
+
+        // 2. Insert new merchant record into Supabase
+        const newMerchant = {
+          phone: cleanPhone,
+          pin_hash: cleanPin,
+          store_name: cleanStore,
+          location: cleanLoc,
+          otp_verified: true,
+          currency: 'INR'
+        };
+
+        const { data: created, error: insertErr } = await this.supabase
+          .from('merchants')
+          .upsert([newMerchant], { onConflict: 'phone' })
+          .select()
+          .single();
+
+        if (insertErr) {
+          throw new Error('Database registration error: ' + (insertErr.message || 'Unable to create store'));
+        }
+
+        this.saveSession(created);
+        return created;
+      }
+
+      // Offline / Local storage fallback when Supabase credentials are not yet configured
+      const localMerchants = JSON.parse(localStorage.getItem('skit_registered_merchants') || '[]');
+      const alreadyRegistered = localMerchants.find((m) => m.phone === cleanPhone && m.otp_verified);
+      if (alreadyRegistered) {
+        throw new Error('Mobile number already registered! Please log in with your 4-digit PIN.');
+      }
+
+      const localMerchant = {
+        id: 'merchant-' + Date.now(),
+        phone: cleanPhone,
+        pin_hash: cleanPin,
+        store_name: cleanStore,
+        location: cleanLoc,
+        otp_verified: true,
+        currency: 'INR',
+        created_at: new Date().toISOString()
+      };
+
+      localMerchants.push(localMerchant);
+      localStorage.setItem('skit_registered_merchants', JSON.stringify(localMerchants));
+      this.saveSession(localMerchant);
+      return localMerchant;
+    }
+
+    /**
+     * Merchant Login with Mobile + 4-digit PIN
+     */
+    async loginMerchantWithPin(phone, pin) {
+      const cleanPhone = String(phone).replace(/\D/g, '').slice(-10);
+      const cleanPin = String(pin).trim();
+
+      if (!cleanPhone || cleanPhone.length !== 10) {
+        throw new Error('Please enter a valid 10-digit mobile number.');
+      }
+      if (!cleanPin || cleanPin.length !== 4) {
+        throw new Error('Please enter your 4-digit PIN.');
+      }
+
+      await this.initPromise;
+
+      if (this.supabase) {
+        const { data: merchant, error } = await this.supabase
+          .from('merchants')
+          .select('*')
+          .eq('phone', cleanPhone)
+          .maybeSingle();
+
+        if (error) {
+          throw new Error('Database error during login: ' + error.message);
+        }
+
+        if (!merchant) {
+          throw new Error('No account found for this mobile number. Please register your store first.');
+        }
+
+        if (merchant.pin_hash !== cleanPin) {
+          throw new Error('Incorrect 4-digit PIN. Please try again or use Forgot PIN.');
+        }
+
+        this.saveSession(merchant);
+        return merchant;
+      }
+
+      // Local storage fallback
+      const localMerchants = JSON.parse(localStorage.getItem('skit_registered_merchants') || '[]');
+      const merchant = localMerchants.find((m) => m.phone === cleanPhone);
+
+      if (!merchant) {
+        throw new Error('No account found for this mobile number. Please register your store first.');
+      }
+
+      if (merchant.pin_hash !== cleanPin) {
+        throw new Error('Incorrect 4-digit PIN.');
+      }
+
+      this.saveSession(merchant);
+      return merchant;
+    }
+
+    /**
+     * Reset / Forgot PIN with temporary 1111 OTP bypass
+     */
+    async resetPinWithOTP(phone, otp, newPin) {
+      const cleanPhone = String(phone).replace(/\D/g, '').slice(-10);
+      const cleanPin = String(newPin).trim();
+
+      // TODO: Replace temporary 1111 OTP bypass with SMS gateway provider (e.g., MSG91 / Twilio / Supabase Phone Auth)
+      if (otp !== '1111') {
+        throw new Error('Invalid OTP. Use launch code 1111.');
+      }
+      if (!cleanPin || cleanPin.length !== 4) {
+        throw new Error('New PIN must be 4 digits.');
+      }
+
+      await this.initPromise;
+
+      if (this.supabase) {
+        const { data: updated, error } = await this.supabase
+          .from('merchants')
+          .update({ pin_hash: cleanPin })
+          .eq('phone', cleanPhone)
+          .select()
+          .maybeSingle();
+
+        if (error || !updated) {
+          throw new Error('Failed to update PIN: ' + (error ? error.message : 'Phone not found'));
+        }
+        return updated;
+      }
+
+      const localMerchants = JSON.parse(localStorage.getItem('skit_registered_merchants') || '[]');
+      const merchant = localMerchants.find((m) => m.phone === cleanPhone);
+      if (!merchant) throw new Error('Phone number not found.');
+      merchant.pin_hash = cleanPin;
+      localStorage.setItem('skit_registered_merchants', JSON.stringify(localMerchants));
+      return merchant;
+    }
+
+    // -------------------------------------------------------------
+    // Live Merchant Profile
+    // -------------------------------------------------------------
+    getMerchant() {
+      return this.currentMerchant;
+    }
+
+    async updateMerchantProfile(updates) {
+      if (!this.currentMerchant) return null;
+      const updated = { ...this.currentMerchant, ...updates, updated_at: new Date().toISOString() };
+
+      if (this.supabase) {
+        const { error } = await this.supabase
+          .from('merchants')
+          .update({
+            store_name: updated.store_name,
+            location: updated.location
+          })
+          .eq('id', updated.id);
+
+        if (error) console.error('[Supabase Profile Update Error]', error);
+      }
+
+      this.saveSession(updated);
       return updated;
     }
 
     // -------------------------------------------------------------
-    // Products
+    // Live Scoped Products
     // -------------------------------------------------------------
-    getProducts() {
-      return this._get('products') || [];
+    async getProducts() {
+      if (!this.currentMerchant) return [];
+      const merchantId = this.currentMerchant.id;
+
+      if (this.supabase) {
+        const { data, error } = await this.supabase
+          .from('products')
+          .select('*')
+          .eq('merchant_id', merchantId)
+          .order('name', { ascending: true });
+
+        if (!error && data) {
+          this._setLocal('products', data);
+          return data;
+        }
+      }
+      return this._getLocal('products');
     }
 
-    getProductById(id) {
-      return this.getProducts().find((p) => p.id === id);
-    }
-
-    getProductByBarcode(barcode) {
+    async getProductByBarcode(barcode) {
+      if (!this.currentMerchant) return null;
       const clean = String(barcode).trim();
-      return this.getProducts().find((p) => p.barcode === clean);
+      const merchantId = this.currentMerchant.id;
+
+      if (this.supabase) {
+        const { data, error } = await this.supabase
+          .from('products')
+          .select('*')
+          .eq('merchant_id', merchantId)
+          .eq('barcode', clean)
+          .maybeSingle();
+
+        if (!error && data) return data;
+      }
+
+      const local = this._getLocal('products');
+      return local.find((p) => p.barcode === clean) || null;
     }
 
-    addProduct(prod) {
-      const products = this.getProducts();
-      const existing = products.find((p) => p.barcode === prod.barcode);
-      if (existing) {
-        Object.assign(existing, prod);
-        this._set('products', products);
-        this.notify('product_updated', existing);
-        return existing;
-      }
-      const newProd = {
-        id: prod.id || 'prod-' + Date.now(),
-        barcode: prod.barcode,
-        name: prod.name,
-        category: prod.category || 'General',
-        mrp: Number(prod.mrp) || 0,
-        cost_price: Number(prod.cost_price) || 0,
-        shelf_life_days: Number(prod.shelf_life_days) || 30,
-        image_url: prod.image_url || 'assets/images/shelf_illustration.png',
-        unit: prod.unit || 'units'
+    async addProduct(productData) {
+      if (!this.currentMerchant) throw new Error('Merchant session required');
+      const merchantId = this.currentMerchant.id;
+
+      const record = {
+        merchant_id: merchantId,
+        barcode: String(productData.barcode).trim(),
+        name: String(productData.name).trim(),
+        category: productData.category || 'General Grocery',
+        mrp: Number(productData.mrp) || 0,
+        cost_price: Number(productData.cost_price) || 0,
+        shelf_life_days: Number(productData.shelf_life_days) || 30,
+        image_url: productData.image_url || 'assets/images/shelf_illustration.png',
+        unit: productData.unit || 'units'
       };
-      products.push(newProd);
-      this._set('products', products);
-      this.notify('product_added', newProd);
 
-      if (this.supabaseClient) {
-        this.supabaseClient.from('products').insert([newProd]).then(({ error }) => {
-          if (error) console.warn('[Supabase Sync] Product insert error:', error);
-        });
+      if (this.supabase) {
+        const { data, error } = await this.supabase
+          .from('products')
+          .insert([record])
+          .select()
+          .single();
+
+        if (error) {
+          console.error('[Supabase Add Product Error]', error);
+          throw new Error('Failed to save product to database: ' + error.message);
+        }
+
+        const local = this._getLocal('products');
+        local.push(data);
+        this._setLocal('products', local);
+        this.notify('products_updated');
+        return data;
       }
-      return newProd;
+
+      record.id = 'prod-' + Date.now();
+      record.created_at = new Date().toISOString();
+      const local = this._getLocal('products');
+      local.push(record);
+      this._setLocal('products', local);
+      this.notify('products_updated');
+      return record;
     }
 
     // -------------------------------------------------------------
-    // Batches & FEFO Queue
+    // Live Scoped Batches & FEFO Queue
     // -------------------------------------------------------------
-    getBatches() {
-      return this._get('batches') || [];
+    async getBatches() {
+      if (!this.currentMerchant) return [];
+      const merchantId = this.currentMerchant.id;
+
+      if (this.supabase) {
+        const { data, error } = await this.supabase
+          .from('batches')
+          .select('*, products(*)')
+          .eq('merchant_id', merchantId)
+          .gt('quantity_on_hand', 0)
+          .order('expiry_date', { ascending: true });
+
+        if (!error && data) {
+          const formatted = data.map((b) => {
+            const daysLeft = Math.ceil((new Date(b.expiry_date) - new Date()) / (1000 * 60 * 60 * 24));
+            const prod = b.products || {};
+            return {
+              id: b.id,
+              product_id: b.product_id,
+              product_name: prod.name || 'Unnamed Product',
+              product_category: prod.category || 'General',
+              product_image: prod.image_url || 'assets/images/shelf_illustration.png',
+              mrp: prod.mrp || 0,
+              cost_price: prod.cost_price || 0,
+              unit: prod.unit || 'units',
+              batch_code: b.batch_code,
+              expiry_date: b.expiry_date,
+              days_left: Math.max(0, daysLeft),
+              quantity_on_hand: b.quantity_on_hand
+            };
+          });
+          this._setLocal('batches', formatted);
+          return formatted;
+        }
+      }
+
+      return this._getLocal('batches');
     }
 
-    getFEFOQueue() {
-      const batches = this.getBatches().filter((b) => b.quantity_on_hand > 0);
-      const products = this.getProducts();
-      const prodMap = new Map(products.map((p) => [p.id, p]));
+    async addBatch(batchData) {
+      if (!this.currentMerchant) throw new Error('Merchant session required');
+      const merchantId = this.currentMerchant.id;
 
-      return batches
-        .map((b) => {
-          const product = prodMap.get(b.product_id) || {};
-          return {
-            ...b,
-            product_name: product.name || 'Unknown Product',
-            product_category: product.category || 'General',
-            product_image: product.image_url || 'assets/images/shelf_illustration.png',
-            mrp: product.mrp || 0,
-            cost_price: product.cost_price || 0,
-            unit: product.unit || 'units'
-          };
-        })
-        .sort((a, b) => a.days_left - b.days_left);
-    }
-
-    addBatch(batchData) {
-      const batches = this.getBatches();
-      const id = batchData.id || 'batch-' + Date.now();
-      const newBatch = {
-        id,
+      const record = {
+        merchant_id: merchantId,
         product_id: batchData.product_id,
         batch_code: batchData.batch_code || 'BT-' + Math.floor(1000 + Math.random() * 9000),
         expiry_date: batchData.expiry_date,
-        days_left: batchData.days_left !== undefined ? batchData.days_left : 180,
-        quantity_on_hand: Number(batchData.quantity_on_hand) || 1,
-        status: batchData.days_left <= 3 ? 'critical' : batchData.days_left <= 7 ? 'warning' : 'healthy'
+        quantity_on_hand: Number(batchData.quantity_on_hand) || 1
       };
 
-      batches.push(newBatch);
-      this._set('batches', batches);
+      if (this.supabase) {
+        const { data, error } = await this.supabase
+          .from('batches')
+          .insert([record])
+          .select('*, products(*)')
+          .single();
 
-      // Also generate a dynamic markdown suggestion if days_left <= 7
-      if (newBatch.days_left <= 7) {
-        this.generateMarkdownSuggestion(newBatch);
+        if (error) {
+          console.error('[Supabase Add Batch Error]', error);
+          throw new Error('Failed to log batch: ' + error.message);
+        }
+
+        this.notify('batch_added', data);
+        return data;
       }
 
+      // Local fallback
+      const daysLeft = Math.ceil((new Date(record.expiry_date) - new Date()) / (1000 * 60 * 60 * 24));
+      const localBatches = this._getLocal('batches');
+      const localProducts = this._getLocal('products');
+      const prod = localProducts.find((p) => p.id === record.product_id) || {};
+
+      const newBatch = {
+        id: 'batch-' + Date.now(),
+        product_id: record.product_id,
+        product_name: prod.name || batchData.product_name || 'Item',
+        product_category: prod.category || 'General',
+        product_image: prod.image_url || 'assets/images/shelf_illustration.png',
+        mrp: prod.mrp || 0,
+        cost_price: prod.cost_price || 0,
+        unit: prod.unit || 'units',
+        batch_code: record.batch_code,
+        expiry_date: record.expiry_date,
+        days_left: Math.max(0, daysLeft),
+        quantity_on_hand: record.quantity_on_hand
+      };
+
+      localBatches.push(newBatch);
+      this._setLocal('batches', localBatches);
       this.notify('batch_added', newBatch);
-
-      if (this.supabaseClient) {
-        this.supabaseClient.from('batches').insert([{
-          id: newBatch.id,
-          product_id: newBatch.product_id,
-          batch_code: newBatch.batch_code,
-          expiry_date: newBatch.expiry_date,
-          quantity_on_hand: newBatch.quantity_on_hand
-        }]).then(({ error }) => {
-          if (error) console.warn('[Supabase Sync] Batch insert error:', error);
-        });
-      }
-
       return newBatch;
     }
 
-    deductBatchStock(batchId, qty, type = 'sold', customSellingPrice = null) {
-      const batches = this.getBatches();
-      const batch = batches.find((b) => b.id === batchId);
-      if (!batch) return null;
+    async deductBatchStock(batchId, quantity, type = 'sold', customPrice = null) {
+      if (!this.currentMerchant) return null;
+      const merchantId = this.currentMerchant.id;
+      const qty = Number(quantity);
 
-      const qtyDeducted = Math.min(qty, batch.quantity_on_hand);
-      batch.quantity_on_hand -= qtyDeducted;
-      this._set('batches', batches);
+      if (this.supabase) {
+        // Fetch current batch
+        const { data: batch } = await this.supabase
+          .from('batches')
+          .select('id, quantity_on_hand, product_id, products(mrp)')
+          .eq('id', batchId)
+          .eq('merchant_id', merchantId)
+          .single();
 
-      const product = this.getProductById(batch.product_id) || {};
-      const sellingPrice = customSellingPrice !== null ? customSellingPrice : (product.mrp || 0);
+        if (!batch) return null;
 
-      // Record Sales adjustment
-      const sales = this._get('sales') || [];
-      const adjustment = {
-        id: 'sale-' + Date.now(),
-        batch_id: batchId,
-        product_id: batch.product_id,
-        product_name: product.name,
-        quantity: qtyDeducted,
-        type, // 'sold', 'discounted', 'removed'
-        selling_price: sellingPrice,
-        created_at: new Date().toISOString()
-      };
-      sales.push(adjustment);
-      this._set('sales', sales);
+        const newQty = Math.max(0, batch.quantity_on_hand - qty);
+        const sellingPrice = customPrice !== null ? customPrice : (batch.products ? batch.products.mrp : 0);
 
-      // Update Money Saved metric if FEFO rotated
-      if (type === 'sold' || type === 'discounted') {
-        const stats = this._get('stats') || { baseActiveSkus: 420, moneySaved: 2450 };
-        const savedIncrement = Math.round(sellingPrice * qtyDeducted * 0.15); // Saved margin from avoidance of total spoilage
-        stats.moneySaved += savedIncrement;
-        this._set('stats', stats);
-      }
+        // Update batch quantity
+        await this.supabase
+          .from('batches')
+          .update({ quantity_on_hand: newQty })
+          .eq('id', batchId);
 
-      this.notify('stock_deducted', { batch, adjustment });
-
-      if (this.supabaseClient) {
-        this.supabaseClient.from('batches').update({
-          quantity_on_hand: batch.quantity_on_hand
-        }).eq('id', batchId).then(({ error }) => {
-          if (error) console.warn('[Supabase Sync] Batch stock update error:', error);
-        });
-
-        this.supabaseClient.from('sales_adjustments').insert([{
+        // Record adjustment
+        await this.supabase.from('sales_adjustments').insert([{
+          merchant_id: merchantId,
           batch_id: batchId,
-          quantity: qtyDeducted,
+          quantity: qty,
           type,
           selling_price: sellingPrice
-        }]).then(({ error }) => {
-          if (error) console.warn('[Supabase Sync] Sales adjustment insert error:', error);
+        }]);
+
+        this.notify('stock_updated');
+        return { batchId, remaining: newQty };
+      }
+
+      // Local fallback
+      const batches = this._getLocal('batches');
+      const batch = batches.find((b) => b.id === batchId);
+      if (batch) {
+        batch.quantity_on_hand = Math.max(0, batch.quantity_on_hand - qty);
+        this._setLocal('batches', batches);
+
+        const sales = this._getLocal('sales');
+        sales.push({
+          id: 'sale-' + Date.now(),
+          batch_id: batchId,
+          quantity: qty,
+          type,
+          selling_price: customPrice || batch.mrp,
+          created_at: new Date().toISOString()
         });
+        this._setLocal('sales', sales);
+        this.notify('stock_updated');
       }
-
-      return { batch, adjustment };
+      return batch;
     }
 
     // -------------------------------------------------------------
-    // Markdown Engine (Margin Guard)
+    // Live Markdown Engine (Margin Guard: Minimum Floor = Cost + 5%)
     // -------------------------------------------------------------
-    getMarkdowns() {
-      return (this._get('markdowns') || []).filter((m) => m.status === 'pending');
-    }
+    async getMarkdowns() {
+      const batches = await this.getBatches();
+      const markdowns = [];
 
-    generateMarkdownSuggestion(batch) {
-      const product = this.getProductById(batch.product_id);
-      if (!product) return null;
+      for (const batch of batches) {
+        if (batch.quantity_on_hand <= 0) continue;
+        const days = batch.days_left;
 
-      const cost = Number(product.cost_price) || 0;
-      const mrp = Number(product.mrp) || 0;
-      const days = batch.days_left;
+        // Trigger dynamic clearance rule only for near-expiry items (<= 7 days)
+        if (days <= 7) {
+          const cost = Number(batch.cost_price) || 0;
+          const mrp = Number(batch.mrp) || 0;
 
-      let discountPct = 15;
-      if (days <= 2) discountPct = 30;
-      else if (days <= 4) discountPct = 25;
-      else if (days <= 7) discountPct = 20;
+          let discountPct = 15;
+          if (days <= 2) discountPct = 30;
+          else if (days <= 4) discountPct = 25;
+          else if (days <= 7) discountPct = 20;
 
-      // Apply Margin Guard Safety Rule: floor = cost * MARGIN_GUARD_FACTOR
-      const marginGuardFloor = Math.ceil(cost * MARGIN_GUARD_FACTOR);
-      let calculatedPrice = Math.round(mrp * (1 - discountPct / 100));
+          // Margin Guard: Guaranteed price floor at Cost + 5%
+          const marginGuardFloor = Math.ceil(cost * MARGIN_GUARD_FACTOR);
+          let suggestedPrice = Math.round(mrp * (1 - discountPct / 100));
 
-      if (calculatedPrice < marginGuardFloor) {
-        calculatedPrice = marginGuardFloor;
-        discountPct = Math.round(((mrp - calculatedPrice) / mrp) * 100);
+          if (suggestedPrice < marginGuardFloor) {
+            suggestedPrice = marginGuardFloor;
+            discountPct = Math.round(((mrp - suggestedPrice) / mrp) * 100);
+          }
+
+          const unitProfit = Math.max(0, suggestedPrice - cost);
+          const totalProfit = unitProfit * batch.quantity_on_hand;
+
+          markdowns.push({
+            id: 'md-' + batch.id,
+            batch_id: batch.id,
+            product_name: batch.product_name,
+            product_image: batch.product_image,
+            batch_code: batch.batch_code,
+            units: batch.quantity_on_hand,
+            cost_price: cost,
+            mrp,
+            days_left: days,
+            discount_pct: Math.max(5, discountPct),
+            suggested_price: suggestedPrice,
+            unit_profit: unitProfit,
+            total_profit: totalProfit,
+            status: 'pending'
+          });
+        }
       }
 
-      const unitProfit = Math.max(0, calculatedPrice - cost);
-      const totalProfit = unitProfit * batch.quantity_on_hand;
-
-      const suggestion = {
-        id: 'md-' + Date.now(),
-        batch_id: batch.id,
-        product_name: product.name,
-        product_image: product.image_url,
-        batch_code: batch.batch_code,
-        units: batch.quantity_on_hand,
-        cost_price: cost,
-        mrp,
-        days_left: days,
-        discount_pct: discountPct,
-        suggested_price: calculatedPrice,
-        unit_profit: unitProfit,
-        total_profit: totalProfit,
-        status: 'pending'
-      };
-
-      const markdowns = this._get('markdowns') || [];
-      markdowns.push(suggestion);
-      this._set('markdowns', markdowns);
-      this.notify('markdown_created', suggestion);
-      return suggestion;
-    }
-
-    acceptMarkdown(id) {
-      const markdowns = this._get('markdowns') || [];
-      const item = markdowns.find((m) => m.id === id);
-      if (!item) return null;
-      item.status = 'accepted';
-      this._set('markdowns', markdowns);
-
-      // Record in sales adjustment as discounted
-      this.deductBatchStock(item.batch_id, item.units, 'discounted', item.suggested_price);
-
-      this.notify('markdown_accepted', item);
-
-      if (this.supabaseClient) {
-        this.supabaseClient.from('markdown_suggestions').update({
-          status: 'accepted'
-        }).eq('id', id).then(({ error }) => {
-          if (error) console.warn('[Supabase Sync] Markdown update error:', error);
-        });
-      }
-      return item;
-    }
-
-    dismissMarkdown(id) {
-      const markdowns = this._get('markdowns') || [];
-      const item = markdowns.find((m) => m.id === id);
-      if (!item) return null;
-      item.status = 'dismissed';
-      this._set('markdowns', markdowns);
-      this.notify('markdown_dismissed', item);
-
-      if (this.supabaseClient) {
-        this.supabaseClient.from('markdown_suggestions').update({
-          status: 'dismissed'
-        }).eq('id', id).then(({ error }) => {
-          if (error) console.warn('[Supabase Sync] Markdown update error:', error);
-        });
-      }
-      return item;
-    }
-
-    bulkAcceptAllMarkdowns() {
-      const markdowns = this._get('markdowns') || [];
-      const pending = markdowns.filter((m) => m.status === 'pending');
-      pending.forEach((m) => {
-        m.status = 'accepted';
-        this.deductBatchStock(m.batch_id, m.units, 'discounted', m.suggested_price);
-      });
-      this._set('markdowns', markdowns);
-      this.notify('markdowns_bulk_accepted', pending);
-      return pending.length;
+      return markdowns;
     }
 
     // -------------------------------------------------------------
-    // Dashboard Bento Metrics
+    // Live Metrics Computation
     // -------------------------------------------------------------
-    getMetrics() {
-      const batches = this.getBatches();
+    async getMetrics() {
+      if (!this.currentMerchant) {
+        return { activeSkus: 0, fefoCount: 0, moneySaved: 0, pendingMarkdowns: 0, profitRecovered: 0 };
+      }
+
+      const batches = await this.getBatches();
       const activeBatches = batches.filter((b) => b.quantity_on_hand > 0);
       const fefoAlerts = activeBatches.filter((b) => b.days_left <= 7);
-      const stats = this._get('stats') || { baseActiveSkus: 420, moneySaved: 2450 };
-      const markdowns = this.getMarkdowns();
-      const profitRecovered = markdowns.reduce((sum, m) => sum + (m.total_profit || 0), 0);
+      const uniqueSkus = new Set(activeBatches.map((b) => b.product_id)).size;
 
-      // Count active distinct SKUs
-      const activeProducts = new Set(activeBatches.map((b) => b.product_id));
-      const skuCount = stats.baseActiveSkus + Math.max(0, activeProducts.size - 4);
+      let moneySaved = 0;
+      if (this.supabase) {
+        const { data: sales } = await this.supabase
+          .from('sales_adjustments')
+          .select('quantity, selling_price, type')
+          .eq('merchant_id', this.currentMerchant.id);
+
+        if (sales) {
+          moneySaved = sales.reduce((sum, s) => {
+            // Approx 15% estimated spoilage cost averted via proactive clearance/sale
+            return sum + Math.round((Number(s.selling_price) || 0) * (Number(s.quantity) || 0) * 0.15);
+          }, 0);
+        }
+      } else {
+        const sales = this._getLocal('sales');
+        moneySaved = sales.reduce((sum, s) => sum + Math.round(s.selling_price * s.quantity * 0.15), 0);
+      }
+
+      const markdowns = await this.getMarkdowns();
+      const profitRecovered = markdowns.reduce((sum, m) => sum + m.total_profit, 0);
 
       return {
-        activeSkus: skuCount,
+        activeSkus: uniqueSkus,
         fefoCount: fefoAlerts.length,
-        moneySaved: stats.moneySaved,
-        queueCount: fefoAlerts.length,
+        moneySaved,
         pendingMarkdowns: markdowns.length,
         profitRecovered
       };
     }
-
-    // -------------------------------------------------------------
-    // Demo Reset
-    // -------------------------------------------------------------
-    resetToDefaultData() {
-      this._set('products', DEFAULT_PRODUCTS);
-      this._set('batches', DEFAULT_BATCHES);
-      this._set('markdowns', DEFAULT_MARKDOWNS);
-      this._set('sales', []);
-      this._set('merchant', DEFAULT_MERCHANT);
-      this._set('stats', {
-        baseActiveSkus: 420,
-        moneySaved: 2450
-      });
-      this.notify('data_reset');
-    }
   }
 
   // Attach singleton to window
-  window.SkitDB = new SkitDatabase();
+  window.SkitDB = new SkitSupabaseService();
 })(window);

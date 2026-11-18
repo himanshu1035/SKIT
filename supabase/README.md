@@ -1,19 +1,25 @@
-# SKIT Supabase Relational Database Setup
+# SKIT Supabase Production Database Setup
 
-This directory contains the database migration scripts and schema definitions for **SKIT (Smart Kariyana Inventory Technology)**.
+This directory contains the production database migration script for **SKIT (Smart Kariyana Inventory Technology)**.
 
-## Schema Overview
-- `merchants`: Stores mobile authentication, PIN hashes, and merchant store profile details.
-- `products`: Product master catalog (barcode, name, category, mrp, cost_price, shelf_life_days, image_url).
-- `batches`: Per-batch stock levels and expiry tracking for First-Expired, First-Out (FEFO) queue.
+## Production Schema Overview
+
+All inventory, batches, alerts, and markdown suggestions are 100% isolated and scoped per merchant store (`merchant_id`).
+
+- `merchants`: Stores mobile authentication, 4-digit PIN hash, store name, location, and `otp_verified` flag.
+- `products`: Product master catalog scoped to merchant (`merchant_id`, `barcode`, `name`, `category`, `mrp`, `cost_price`, `shelf_life_days`, `image_url`, `unit`).
+- `batches`: Per-batch stock levels and expiry tracking for First-Expired, First-Out (FEFO) queuing.
 - `sales_adjustments`: Audit trail for stock sold, discounted, or removed via Return to Vendor (RTV).
 - `alerts`: Proactive notifications triggered at 14, 7, 3, 2, or 1 days prior to batch expiration.
-- `markdown_suggestions`: Margin Guard-compliant dynamic markdown pricing (minimum floor: cost + 5%).
+- `markdown_suggestions`: Dynamic clearance recommendations governed by Margin Guard (minimum price floor: cost + 5%).
 
-## Quick Migration Steps
+## Migration Instructions
 
-1. Create a new project in your [Supabase Dashboard](https://supabase.com).
-2. Open the **SQL Editor** tab.
+1. Open your [Supabase Dashboard](https://supabase.com).
+2. Go to the **SQL Editor** tab.
 3. Paste the contents of `supabase/migrations/20261118_initial_schema.sql` and run it.
 4. Copy your **Project URL** and **Anon Public Key** from **Settings > API**.
-5. In the SKIT web app, navigate to **Settings** and enter your Supabase URL and Anon Key. The app will immediately link to your live Supabase backend and synchronize all operations in real-time.
+5. Add them to your **Vercel Project Settings** under **Environment Variables**:
+   - `SUPABASE_URL` = `https://your-project.supabase.co`
+   - `SUPABASE_ANON_KEY` = `eyJhbGciOi...`
+6. Once configured in Vercel, SKIT connects automatically with zero client configuration required!

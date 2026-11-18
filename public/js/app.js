@@ -1,6 +1,6 @@
 /**
  * SKIT: Smart Kariyana Inventory Technology
- * Main Application Controller, Router & UI Engine
+ * Production Application Controller & Route Orchestrator
  */
 
 (function (window, document) {
@@ -9,15 +9,37 @@
   // State
   let currentRoute = 'welcome';
   let activeSoldModal = null;
-  let activeManualEditModal = null;
-  let deferredInstallPrompt = null;
   let cameraStream = null;
+  let deferredInstallPrompt = null;
 
-  // Selected product in scanner view
-  let currentScanProductIndex = 0;
-  let currentScanIntakeCount = 1;
+  // Scanner Live Form State
+  let scannerState = {
+    barcode: '8901260012345',
+    name: 'Packaged Grocery Item',
+    category: 'Daily Staples',
+    mrp: 50,
+    cost_price: 40,
+    expiryDate: getFutureDate(30),
+    daysLeft: 30,
+    batchCode: 'BT-' + Math.floor(1000 + Math.random() * 9000),
+    quantity: 1
+  };
 
-  // Notification Toast Helper
+  function getFutureDate(days) {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    return d.toISOString().split('T')[0];
+  }
+
+  function formatDateHuman(isoDate) {
+    if (!isoDate) return 'No Date';
+    const d = new Date(isoDate);
+    return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+
+  // -------------------------------------------------------------
+  // Toast Notification System
+  // -------------------------------------------------------------
   function showToast(message, isSuccess = true, icon = null) {
     const toast = document.getElementById('app-toast');
     if (!toast) return;
@@ -40,32 +62,46 @@
     window._toastTimer = setTimeout(() => {
       toast.classList.add('opacity-0', '-translate-y-28', 'pointer-events-none');
       toast.classList.remove('opacity-100', 'translate-y-0');
-    }, 2800);
+    }, 3000);
   }
+  window.showToast = showToast;
 
   // -------------------------------------------------------------
-  // Router
+  // Client Router
   // -------------------------------------------------------------
   const routes = ['welcome', 'login', 'signup', 'dashboard', 'scan', 'clearance', 'inventory', 'settings'];
 
   function navigateTo(route) {
     const clean = route.replace(/^#\/?/, '').toLowerCase() || 'welcome';
-    const target = routes.includes(clean) ? clean : 'welcome';
-    window.location.hash = '#' + target;
+    window.location.hash = '#' + clean;
   }
+  window.navigateTo = navigateTo;
 
-  function handleRoute() {
+  async function handleRoute() {
     const hash = window.location.hash.replace(/^#\/?/, '').toLowerCase();
     const route = routes.includes(hash) ? hash : 'welcome';
     currentRoute = route;
 
-    // Stop camera if leaving scanner
+    // Check Authentication Guard
+    const merchant = window.SkitDB.getMerchant();
+    const isAuthRoute = ['welcome', 'login', 'signup'].includes(route);
+
+    if (!merchant && !isAuthRoute) {
+      navigateTo('welcome');
+      return;
+    }
+    if (merchant && isAuthRoute) {
+      navigateTo('dashboard');
+      return;
+    }
+
+    // Stop camera feed if navigating away from scanner
     if (route !== 'scan' && cameraStream) {
       cameraStream.getTracks().forEach((track) => track.stop());
       cameraStream = null;
     }
 
-    // Toggle view containers
+    // Toggle View DOM Elements
     document.querySelectorAll('.app-view').forEach((el) => {
       if (el.dataset.route === route) {
         el.classList.remove('hidden');
@@ -74,13 +110,10 @@
       }
     });
 
-    // Toggle navigation visibility (hidden on welcome, login, signup)
+    // Toggle Bottom Navigation Visibility
     const nav = document.getElementById('app-bottom-nav');
-    const header = document.getElementById('app-fixed-header');
-    const isAuth = ['welcome', 'login', 'signup'].includes(route);
-
     if (nav) {
-      if (isAuth) {
+      if (isAuthRoute) {
         nav.classList.add('hidden');
       } else {
         nav.classList.remove('hidden');
@@ -88,17 +121,17 @@
       }
     }
 
-    // Render screen specific logic
+    // Render screen
     if (route === 'dashboard') {
-      renderDashboard();
+      await renderDashboard();
     } else if (route === 'scan') {
-      renderScanner();
+      await renderScanner();
     } else if (route === 'clearance') {
-      renderClearance();
+      await renderClearance();
     } else if (route === 'inventory') {
-      renderInventory();
+      await renderInventory();
     } else if (route === 'settings') {
-      renderSettings();
+      await renderSettings();
     }
 
     window.scrollTo(0, 0);
@@ -128,18 +161,21 @@
   }
 
   // -------------------------------------------------------------
-  // Screen: Dashboard
+  // Screen: Store Dashboard & Real-Time FEFO Queue
   // -------------------------------------------------------------
-  function renderDashboard() {
+  async function renderDashboard() {
     const merchant = window.SkitDB.getMerchant();
-    const metrics = window.SkitDB.getMetrics();
-    const queue = window.SkitDB.getFEFOQueue();
+    if (!merchant) return;
 
-    // Store Info
+    // Display Authenticated Store Context
     const storeTitle = document.getElementById('dash-store-name');
     const storeLoc = document.getElementById('dash-store-loc');
-    if (storeTitle) storeTitle.textContent = merchant.store_name || 'Gupta General Store';
-    if (storeLoc) storeLoc.textContent = merchant.location || 'Sector 14';
+    if (storeTitle) storeTitle.textContent = merchant.store_name || 'My Kirana Store';
+    if (storeLoc) storeLoc.textContent = merchant.location || 'Local Market';
+
+    // Show loading state for metrics
+    const metrics = await window.SkitDB.getMetrics();
+    const batches = await window.SkitDB.getBatches();
 
     // Bento Tickers
     const activeSkusEl = document.getElementById('stat-active-skus');
@@ -150,34 +186,57 @@
     if (activeSkusEl) activeSkusEl.textContent = metrics.activeSkus;
     if (fefoCountEl) fefoCountEl.textContent = metrics.fefoCount;
     if (moneySavedEl) moneySavedEl.textContent = '₹' + Number(metrics.moneySaved).toLocaleString('en-IN');
-    if (actionCountEl) actionCountEl.textContent = queue.length + ' items';
 
-    // Queue Cards
+    // Filter batches needing priority action (<= 7 days)
+    const priorityQueue = batches.filter((b) => b.days_left <= 7);
+    if (actionCountEl) actionCountEl.textContent = priorityQueue.length + ' items';
+
     const queueContainer = document.getElementById('dashboard-action-queue');
     if (!queueContainer) return;
 
-    if (queue.length === 0) {
-      queueContainer.innerHTML = `
-        <div class="bg-surface-container-lowest rounded-2xl p-6 text-center shadow-sm">
-          <div class="w-14 h-14 rounded-full bg-primary/10 text-primary mx-auto flex items-center justify-center mb-2">
-            <span class="material-symbols-outlined text-[32px]">check_circle</span>
+    // Empty State when new store has 0 batches or zero expiring items
+    if (priorityQueue.length === 0) {
+      if (batches.length === 0) {
+        queueContainer.innerHTML = `
+          <div class="bg-surface-container-lowest rounded-2xl p-6 text-center shadow-sm flex flex-col items-center">
+            <div class="w-14 h-14 rounded-full bg-primary/10 text-primary mx-auto flex items-center justify-center mb-3">
+              <span class="material-symbols-outlined text-[32px]">inventory_2</span>
+            </div>
+            <h4 class="font-headline-title text-headline-title text-on-surface font-bold text-lg">No Inventory Batches Yet</h4>
+            <p class="font-body-default text-body-default text-on-surface-variant mt-1 max-w-xs text-sm">
+              Your store is ready! Tap below to scan incoming stock and track expiry dates automatically.
+            </p>
+            <button onclick="location.hash='#scan'" class="mt-4 px-5 py-2.5 bg-primary text-on-primary rounded-xl font-label-badge text-label-badge font-semibold flex items-center gap-1.5 active:scale-95 transition shadow-md">
+              <span class="material-symbols-outlined text-[18px]">qr_code_scanner</span>
+              Scan First Stock Intake
+            </button>
           </div>
-          <h4 class="font-headline-title text-headline-title text-on-surface">All Batches Fresh</h4>
-          <p class="font-body-default text-body-default text-on-surface-variant mt-1">No urgent FEFO expirations in the next 7 days.</p>
-        </div>
-      `;
+        `;
+      } else {
+        queueContainer.innerHTML = `
+          <div class="bg-surface-container-lowest rounded-2xl p-6 text-center shadow-sm flex flex-col items-center">
+            <div class="w-14 h-14 rounded-full bg-primary/10 text-primary mx-auto flex items-center justify-center mb-3">
+              <span class="material-symbols-outlined text-[32px]">verified</span>
+            </div>
+            <h4 class="font-headline-title text-headline-title text-on-surface font-bold text-lg">All Batches Fresh &amp; Safe</h4>
+            <p class="font-body-default text-body-default text-on-surface-variant mt-1 max-w-xs text-sm">
+              None of your ${batches.length} active batches are expiring within the next 7 days.
+            </p>
+          </div>
+        `;
+      }
       return;
     }
 
-    queueContainer.innerHTML = queue
+    // Render Live Priority Queue Cards
+    queueContainer.innerHTML = priorityQueue
       .map((item) => {
-        const isCritical = item.days_left <= 3;
         const badgeClass =
           item.days_left <= 1
             ? 'bg-error text-on-error shadow-sm'
-            : isCritical
-            ? 'bg-tertiary-fixed text-on-tertiary-fixed'
-            : 'bg-secondary-fixed text-on-secondary-fixed';
+            : item.days_left <= 3
+            ? 'bg-tertiary-fixed text-on-tertiary-fixed font-bold'
+            : 'bg-secondary-fixed text-on-secondary-fixed font-semibold';
 
         const daysLabel =
           item.days_left === 1
@@ -189,29 +248,28 @@
         return `
           <div class="bg-surface-container-lowest rounded-xl p-space-md shadow-sm transition-all duration-200" id="card-${item.id}">
             <div class="flex gap-space-md items-start">
-              <div class="relative w-16 h-16 rounded-xl overflow-hidden bg-surface-container-low flex-shrink-0">
-                <img class="w-full h-full object-cover" src="${item.product_image}" alt="${item.product_name}" onerror="this.src='assets/images/shelf_illustration.png'" />
+              <div class="relative w-16 h-16 rounded-xl overflow-hidden bg-surface-container-low flex-shrink-0 flex items-center justify-center">
+                <img class="w-full h-full object-cover" src="${item.product_image || 'assets/images/shelf_illustration.png'}" alt="${item.product_name}" onerror="this.src='assets/images/shelf_illustration.png'" />
               </div>
               <div class="flex-1 min-w-0">
                 <div class="flex items-start justify-between gap-1">
-                  <h4 class="font-body-medium text-body-medium text-on-surface truncate">${item.product_name}</h4>
+                  <h4 class="font-body-medium text-body-medium text-on-surface truncate font-semibold">${item.product_name}</h4>
                   <span class="inline-flex items-center px-2 py-0.5 rounded-full ${badgeClass} font-label-badge text-label-badge whitespace-nowrap">
                     ${daysLabel}
                   </span>
                 </div>
                 <p class="font-metadata-compact text-metadata-compact text-on-surface-variant mt-0.5">
-                  Batch #${item.batch_code} • <span class="font-semibold text-on-surface">${item.quantity_on_hand}</span> ${item.unit}
+                  Batch #${item.batch_code} • <span class="font-bold text-on-surface">${item.quantity_on_hand}</span> ${item.unit}
                 </p>
-                <!-- Actions -->
                 <div class="mt-3 flex items-center gap-2">
                   <button 
-                    class="flex-1 h-9 rounded-lg bg-primary-container text-on-primary font-label-badge text-label-badge flex items-center justify-center gap-1 active:scale-95 transition-transform shadow-sm font-medium" 
-                    onclick="window.openSoldModal('${item.id}', '${item.product_name.replace(/'/g, "\\'")}', ${item.quantity_on_hand}, '${item.unit}')">
+                    class="flex-1 h-9 rounded-lg bg-primary-container text-on-primary font-label-badge text-label-badge flex items-center justify-center gap-1 active:scale-95 transition shadow-sm font-medium" 
+                    onclick="window.openSoldModal('${item.id}', '${item.product_name.replace(/'/g, "\\'")}', ${item.quantity_on_hand}, '${item.unit}', ${item.mrp})">
                     <span class="material-symbols-outlined text-[16px]">sell</span>
                     Item Sold
                   </button>
                   <button 
-                    class="px-2.5 h-9 rounded-lg bg-surface-container-high text-on-surface font-label-badge text-label-badge flex items-center justify-center gap-1 active:scale-95 transition-transform" 
+                    class="px-2.5 h-9 rounded-lg bg-surface-container-high text-on-surface font-label-badge text-label-badge flex items-center justify-center gap-1 active:scale-95 transition" 
                     onclick="window.quickApplyDiscount('${item.id}', 20)">
                     <span class="material-symbols-outlined text-[15px] text-primary">percent</span>
                     20% Off
@@ -219,8 +277,8 @@
                   <button 
                     aria-label="Return to Vendor" 
                     title="Return to Vendor"
-                    class="px-2.5 h-9 rounded-lg bg-error-container text-on-error-container font-label-badge text-label-badge flex items-center justify-center gap-0.5 active:scale-95 transition-transform" 
-                    onclick="window.triggerRTV('${item.id}', '${item.product_name.replace(/'/g, "\\'")}')">
+                    class="px-2.5 h-9 rounded-lg bg-error-container text-on-error-container font-label-badge text-label-badge flex items-center justify-center gap-0.5 active:scale-95 transition" 
+                    onclick="window.triggerRTV('${item.id}', '${item.product_name.replace(/'/g, "\\'")}', ${item.quantity_on_hand})">
                     <span class="material-symbols-outlined text-[15px]">delete_sweep</span>
                     RTV
                   </button>
@@ -234,14 +292,15 @@
   }
 
   // -------------------------------------------------------------
-  // Sold Modal Flow
+  // Live Item Deduction Modal
   // -------------------------------------------------------------
-  window.openSoldModal = function (batchId, name, maxStock, unit) {
+  window.openSoldModal = function (batchId, name, maxStock, unit, mrp) {
     activeSoldModal = {
       batchId,
       name,
-      maxStock,
-      unit,
+      maxStock: Number(maxStock),
+      unit: unit || 'units',
+      mrp: Number(mrp) || 0,
       qty: 1
     };
 
@@ -249,9 +308,9 @@
     const qtyVal = document.getElementById('modal-qty-value');
     const remainingPreview = document.getElementById('modal-remaining-preview');
 
-    if (subtitle) subtitle.textContent = `${name} • ${maxStock} ${unit} available`;
+    if (subtitle) subtitle.textContent = `${name} • ${maxStock} ${activeSoldModal.unit} available`;
     if (qtyVal) qtyVal.textContent = '1';
-    if (remainingPreview) remainingPreview.textContent = `Remaining after sale: ${maxStock - 1} ${unit}`;
+    if (remainingPreview) remainingPreview.textContent = `Remaining after sale: ${maxStock - 1} ${activeSoldModal.unit}`;
 
     const backdrop = document.getElementById('sold-modal-backdrop');
     const sheet = document.getElementById('sold-modal-sheet');
@@ -305,106 +364,68 @@
     }
   }
 
-  window.confirmStockDeduction = function () {
+  window.confirmStockDeduction = async function () {
     if (!activeSoldModal) return;
-    const { batchId, name, qty, unit } = activeSoldModal;
+    const { batchId, name, qty, unit, mrp } = activeSoldModal;
 
-    const result = window.SkitDB.deductBatchStock(batchId, qty, 'sold');
-    window.closeSoldModal();
-
-    if (result) {
-      showToast(`Stock updated: Sold ${qty} ${unit} of ${name}`);
-      renderDashboard();
+    try {
+      await window.SkitDB.deductBatchStock(batchId, qty, 'sold', mrp);
+      window.closeSoldModal();
+      showToast(`Logged sale: ${qty} ${unit} of ${name}`);
+      await renderDashboard();
+    } catch (e) {
+      showToast('Error recording sale: ' + e.message, false);
     }
   };
 
-  window.quickApplyDiscount = function (batchId, pct) {
-    const batches = window.SkitDB.getBatches();
-    const batch = batches.find((b) => b.id === batchId);
-    if (!batch) return;
-
-    const product = window.SkitDB.getProductById(batch.product_id) || {};
-    const discountedPrice = Math.round(product.mrp * (1 - pct / 100));
-
-    // Deduct stock as discounted sale
-    window.SkitDB.deductBatchStock(batchId, 1, 'discounted', discountedPrice);
-    showToast(`${pct}% Off applied to ${product.name}! Sale logged.`);
-    renderDashboard();
+  window.quickApplyDiscount = async function (batchId, pct) {
+    try {
+      await window.SkitDB.deductBatchStock(batchId, 1, 'discounted');
+      showToast(`${pct}% Off sale logged!`);
+      await renderDashboard();
+    } catch (e) {
+      showToast('Error applying discount', false);
+    }
   };
 
-  window.triggerRTV = function (batchId, name) {
-    const batches = window.SkitDB.getBatches();
-    const batch = batches.find((b) => b.id === batchId);
-    if (!batch) return;
-
-    const qty = batch.quantity_on_hand;
-    window.SkitDB.deductBatchStock(batchId, qty, 'removed', 0);
-    showToast(`RTV initiated: Returned ${qty} units of ${name} to distributor.`);
-    renderDashboard();
+  window.triggerRTV = async function (batchId, name, qty) {
+    if (confirm(`Return all ${qty} units of ${name} to vendor?`)) {
+      try {
+        await window.SkitDB.deductBatchStock(batchId, qty, 'removed', 0);
+        showToast(`RTV confirmed: Removed ${qty} units from inventory.`);
+        await renderDashboard();
+      } catch (e) {
+        showToast('Error recording RTV', false);
+      }
+    }
   };
 
   // -------------------------------------------------------------
   // Screen: Live Scanner & Intake (M1)
   // -------------------------------------------------------------
-  const SCANNER_PRESETS = [
-    {
-      barcode: '8901260012345',
-      name: 'Amul Butter 500g',
-      category: 'Dairy / Spreads',
-      mrp: 285.0,
-      cost_price: 230.0,
-      expiryDateText: '14 Oct 2026',
-      calculatedLifeDays: 234,
-      batchCode: 'BT-4092',
-      confidence: '99.4%',
-      fefoTier: 'FEFO Safe • Priority Tier 1',
-      image: 'assets/images/amul_butter_500g.png',
-      unit: 'units'
-    },
-    {
-      barcode: '8901262010012',
-      name: 'Amul Taaza Milk 500ml',
-      category: 'Dairy / Fresh Milk',
-      mrp: 27.0,
-      cost_price: 22.0,
-      expiryDateText: '21 Nov 2026',
-      calculatedLifeDays: 3,
-      batchCode: 'BT-8821',
-      confidence: '98.9%',
-      fefoTier: 'FEFO Urgent • Priority Tier 3',
-      image:
-        'https://lh3.googleusercontent.com/aida-public/AB6AXuAn9wUU-e6prC4R6B19O3pnoRSSqQMq-lPTYeMWrZUx39lRiQsddMk7IGYpjWFEPU-VsmuwUhqi31VxWWrfvy2IJdIZXAUjsuCyn1TlaWfmYg2wmj9ghznhb8797e6h5nLR5-FqXvHdkiJVTLVFuVzd0wzC7viBRRWzYYAxYmS95Nrt_89EUWe2ENT2rlYzwPmlK8tJLTkU-a_Q3_ULvjG5mqWzM3xiuPCSwKikSbA',
-      unit: 'pouches'
-    },
-    {
-      barcode: '8901063142104',
-      name: 'Britannia Brown Bread',
-      category: 'Bakery / Bread',
-      mrp: 50.0,
-      cost_price: 28.0,
-      expiryDateText: '20 Nov 2026',
-      calculatedLifeDays: 2,
-      batchCode: 'BT-8904',
-      confidence: '99.1%',
-      fefoTier: 'FEFO Urgent • Priority Tier 3',
-      image:
-        'https://lh3.googleusercontent.com/aida-public/AB6AXuAmsSPfMkd0UUg7g3qacMaDxmrvuxTPGJp1pQv-6BJg4b0e-qLcdFyEU3ycEaLQhhSB9Rm_O5nwVNv_DWWfm_NjWNnDa5NliJTRFdjOphAAt6ni0iPp5PADYUlaqOrfkXI0lZBNmxuJzyvMI_ef6YOG8bL5KjA_xkq8I1Gjb6KYoLTGmkt67Qq37-RHKsEXY7aJzgrHwbAjT3yuJpkicJQgW16YeAGg04ppD3YpJMg',
-      unit: 'packs'
+  async function renderScanner() {
+    const products = await window.SkitDB.getProducts();
+
+    // Populate default scanner state if merchant already has products
+    if (products.length > 0) {
+      const p = products[0];
+      scannerState.barcode = p.barcode;
+      scannerState.name = p.name;
+      scannerState.category = p.category;
+      scannerState.mrp = p.mrp;
+      scannerState.cost_price = p.cost_price;
     }
-  ];
 
-  function renderScanner() {
-    const item = SCANNER_PRESETS[currentScanProductIndex];
-    currentScanIntakeCount = 1;
+    updateScannerDisplay();
+    initCameraFeed();
+  }
 
-    // Viewfinder AR tags
+  function updateScannerDisplay() {
     const arBarcode = document.getElementById('scan-ar-barcode');
     const arExpiry = document.getElementById('scan-ar-expiry');
-    if (arBarcode) arBarcode.textContent = `${item.barcode} (100%)`;
-    if (arExpiry) arExpiry.textContent = `EXP: ${item.expiryDateText}`;
+    if (arBarcode) arBarcode.textContent = `${scannerState.barcode} (100%)`;
+    if (arExpiry) arExpiry.textContent = `EXP: ${formatDateHuman(scannerState.expiryDate)}`;
 
-    // Intake card fields
-    const thumb = document.getElementById('scan-product-thumb');
     const nameEl = document.getElementById('scan-product-name');
     const mrpEl = document.getElementById('scan-product-mrp');
     const catEl = document.getElementById('scan-product-category');
@@ -412,22 +433,16 @@
     const batchCodeEl = document.getElementById('scan-batch-code');
     const expiryEl = document.getElementById('scan-expiry-date');
     const shelfLifeEl = document.getElementById('scan-shelf-life');
-    const fefoTierEl = document.getElementById('scan-fefo-tier');
     const countEl = document.getElementById('intake-count');
 
-    if (thumb) thumb.src = item.image;
-    if (nameEl) nameEl.textContent = item.name;
-    if (mrpEl) mrpEl.textContent = `₹${item.mrp}`;
-    if (catEl) catEl.textContent = item.category;
-    if (barcodeEl) barcodeEl.textContent = item.barcode;
-    if (batchCodeEl) batchCodeEl.textContent = `Batch: #${item.batchCode}`;
-    if (expiryEl) expiryEl.textContent = item.expiryDateText;
-    if (shelfLifeEl) shelfLifeEl.textContent = `${item.calculatedLifeDays} Days`;
-    if (fefoTierEl) fefoTierEl.textContent = item.fefoTier;
-    if (countEl) countEl.textContent = currentScanIntakeCount;
-
-    // Optional camera feed initialization
-    initCameraFeed();
+    if (nameEl) nameEl.textContent = scannerState.name;
+    if (mrpEl) mrpEl.textContent = `₹${scannerState.mrp}`;
+    if (catEl) catEl.textContent = scannerState.category;
+    if (barcodeEl) barcodeEl.textContent = scannerState.barcode;
+    if (batchCodeEl) batchCodeEl.textContent = `Batch: #${scannerState.batchCode}`;
+    if (expiryEl) expiryEl.textContent = formatDateHuman(scannerState.expiryDate);
+    if (shelfLifeEl) shelfLifeEl.textContent = `${scannerState.daysLeft} Days`;
+    if (countEl) countEl.textContent = scannerState.quantity;
   }
 
   async function initCameraFeed() {
@@ -446,104 +461,86 @@
         video.classList.remove('hidden');
         if (fallbackBg) fallbackBg.classList.add('hidden');
       } catch (err) {
-        // Fallback to high quality viewfinder background from design system
         if (fallbackBg) fallbackBg.classList.remove('hidden');
         video.classList.add('hidden');
       }
     }
   }
 
-  window.cycleScanProduct = function () {
-    currentScanProductIndex = (currentScanProductIndex + 1) % SCANNER_PRESETS.length;
-    renderScanner();
-    showToast(`Switched target: ${SCANNER_PRESETS[currentScanProductIndex].name}`);
-  };
-
   window.decrementIntakeCount = function () {
-    if (currentScanIntakeCount > 1) {
-      currentScanIntakeCount--;
+    if (scannerState.quantity > 1) {
+      scannerState.quantity--;
       const countEl = document.getElementById('intake-count');
-      if (countEl) countEl.textContent = currentScanIntakeCount;
+      if (countEl) countEl.textContent = scannerState.quantity;
     }
   };
 
   window.incrementIntakeCount = function () {
-    currentScanIntakeCount++;
+    scannerState.quantity++;
     const countEl = document.getElementById('intake-count');
-    if (countEl) countEl.textContent = currentScanIntakeCount;
+    if (countEl) countEl.textContent = scannerState.quantity;
   };
 
-  window.confirmIntake = function () {
-    const item = SCANNER_PRESETS[currentScanProductIndex];
+  window.confirmIntake = async function () {
     const btn = document.getElementById('btn-confirm-intake');
     if (!btn) return;
 
     const originalHTML = btn.innerHTML;
-    btn.innerHTML = `
-      <span class="material-symbols-outlined text-[22px] animate-spin">refresh</span>
-      <span>Saving to Shelf...</span>
-    `;
+    btn.innerHTML = `<span class="material-symbols-outlined text-[22px] animate-spin">refresh</span><span>Saving to Supabase...</span>`;
 
-    setTimeout(() => {
-      // Find or create product in DB
-      let product = window.SkitDB.getProductByBarcode(item.barcode);
+    try {
+      // 1. Check if product exists in live database
+      let product = await window.SkitDB.getProductByBarcode(scannerState.barcode);
       if (!product) {
-        product = window.SkitDB.addProduct({
-          barcode: item.barcode,
-          name: item.name,
-          category: item.category,
-          mrp: item.mrp,
-          cost_price: item.cost_price,
-          shelf_life_days: item.calculatedLifeDays,
-          image_url: item.image,
-          unit: item.unit
+        product = await window.SkitDB.addProduct({
+          barcode: scannerState.barcode,
+          name: scannerState.name,
+          category: scannerState.category,
+          mrp: scannerState.mrp,
+          cost_price: scannerState.cost_price,
+          shelf_life_days: scannerState.daysLeft,
+          unit: 'units'
         });
       }
 
-      // Add batch
-      const today = new Date();
-      today.setDate(today.getDate() + item.calculatedLifeDays);
-      const expiryStr = today.toISOString().split('T')[0];
-
-      window.SkitDB.addBatch({
+      // 2. Add batch under merchant store ID
+      await window.SkitDB.addBatch({
         product_id: product.id,
-        batch_code: item.batchCode,
-        expiry_date: expiryStr,
-        days_left: item.calculatedLifeDays,
-        quantity_on_hand: currentScanIntakeCount
+        product_name: product.name,
+        batch_code: scannerState.batchCode,
+        expiry_date: scannerState.expiryDate,
+        quantity_on_hand: scannerState.quantity
       });
 
-      btn.innerHTML = `
-        <span class="material-symbols-outlined text-[22px]">check_circle</span>
-        <span>Batch Added (${currentScanIntakeCount} ${item.unit})!</span>
-      `;
+      btn.innerHTML = `<span class="material-symbols-outlined text-[22px]">check_circle</span><span>Batch Added!</span>`;
       btn.classList.remove('bg-primary');
       btn.classList.add('bg-primary-container');
 
-      showToast(`Intake logged: ${currentScanIntakeCount} ${item.unit} of ${item.name}`);
+      showToast(`Added ${scannerState.quantity} units of ${scannerState.name} to shelf!`);
 
       setTimeout(() => {
         btn.innerHTML = originalHTML;
         btn.classList.remove('bg-primary-container');
         btn.classList.add('bg-primary');
         navigateTo('dashboard');
-      }, 1200);
-    }, 600);
+      }, 1000);
+    } catch (e) {
+      btn.innerHTML = originalHTML;
+      showToast('Error adding batch: ' + e.message, false);
+    }
   };
 
-  // -------------------------------------------------------------
-  // Manual Edit Modal for Scanner
-  // -------------------------------------------------------------
   window.openManualEditModal = function () {
-    const item = SCANNER_PRESETS[currentScanProductIndex];
     const modal = document.getElementById('manual-edit-modal');
     if (!modal) return;
 
-    document.getElementById('manual-name').value = item.name;
-    document.getElementById('manual-barcode').value = item.barcode;
-    document.getElementById('manual-batch').value = item.batchCode;
-    document.getElementById('manual-days').value = item.calculatedLifeDays;
-    document.getElementById('manual-qty').value = currentScanIntakeCount;
+    document.getElementById('manual-name').value = scannerState.name;
+    document.getElementById('manual-barcode').value = scannerState.barcode;
+    document.getElementById('manual-batch').value = scannerState.batchCode;
+    document.getElementById('manual-mrp').value = scannerState.mrp;
+    document.getElementById('manual-cost').value = scannerState.cost_price;
+    document.getElementById('manual-expiry').value = scannerState.expiryDate;
+    document.getElementById('manual-qty').value = scannerState.quantity;
 
     modal.classList.remove('hidden');
   };
@@ -554,28 +551,34 @@
   };
 
   window.saveManualEdit = function () {
-    const item = SCANNER_PRESETS[currentScanProductIndex];
-    item.name = document.getElementById('manual-name').value || item.name;
-    item.batchCode = document.getElementById('manual-batch').value || item.batchCode;
-    item.calculatedLifeDays = parseInt(document.getElementById('manual-days').value) || item.calculatedLifeDays;
-    currentScanIntakeCount = parseInt(document.getElementById('manual-qty').value) || 1;
+    scannerState.name = document.getElementById('manual-name').value.trim() || scannerState.name;
+    scannerState.barcode = document.getElementById('manual-barcode').value.trim() || scannerState.barcode;
+    scannerState.batchCode = document.getElementById('manual-batch').value.trim() || scannerState.batchCode;
+    scannerState.mrp = Number(document.getElementById('manual-mrp').value) || scannerState.mrp;
+    scannerState.cost_price = Number(document.getElementById('manual-cost').value) || scannerState.cost_price;
+    scannerState.expiryDate = document.getElementById('manual-expiry').value || scannerState.expiryDate;
+    scannerState.quantity = Number(document.getElementById('manual-qty').value) || 1;
+
+    // Recalculate days left
+    const days = Math.ceil((new Date(scannerState.expiryDate) - new Date()) / (1000 * 60 * 60 * 24));
+    scannerState.daysLeft = Math.max(0, days);
 
     window.closeManualEditModal();
-    renderScanner();
-    showToast('Manual values updated');
+    updateScannerDisplay();
+    showToast('Intake details updated');
   };
 
   // -------------------------------------------------------------
   // Screen: Clearance & Freshness Markdown Engine (M4)
   // -------------------------------------------------------------
-  function renderClearance() {
-    const markdowns = window.SkitDB.getMarkdowns();
+  async function renderClearance() {
+    const markdowns = await window.SkitDB.getMarkdowns();
     const countReadyEl = document.getElementById('clearance-count-ready');
     const profitEl = document.getElementById('clearance-profit-recovered');
     const container = document.getElementById('clearance-cards-container');
     const emptyState = document.getElementById('clearance-all-clear-state');
 
-    const totalProfit = markdowns.reduce((sum, m) => sum + (m.total_profit || 0), 0);
+    const totalProfit = markdowns.reduce((sum, m) => sum + m.total_profit, 0);
     if (countReadyEl) countReadyEl.textContent = markdowns.length;
     if (profitEl) profitEl.textContent = '₹' + totalProfit;
 
@@ -593,26 +596,22 @@
       .map((item) => {
         const isUrgent = item.days_left <= 2;
         const pillBadgeClass = isUrgent
-          ? 'bg-error-container text-on-error-container'
-          : 'bg-secondary-fixed text-on-secondary-fixed';
+          ? 'bg-error-container text-on-error-container font-bold'
+          : 'bg-secondary-fixed text-on-secondary-fixed font-semibold';
         const pillIcon = isUrgent ? 'warning' : 'timer';
 
         return `
           <article class="suggestion-card bg-surface-container-lowest rounded-xl p-space-md shadow-md transition-all duration-300" data-id="${item.id}">
             <div class="flex items-start gap-space-md">
-              <div class="w-16 h-16 rounded-xl bg-surface-container overflow-hidden flex-shrink-0 relative">
-                <img 
-                  alt="${item.product_name}" 
-                  class="w-full h-full object-cover" 
-                  src="${item.product_image}" 
-                  onerror="this.src='assets/images/shelf_illustration.png'" />
+              <div class="w-16 h-16 rounded-xl bg-surface-container overflow-hidden flex-shrink-0 relative flex items-center justify-center">
+                <img alt="${item.product_name}" class="w-full h-full object-cover" src="${item.product_image || 'assets/images/shelf_illustration.png'}" onerror="this.src='assets/images/shelf_illustration.png'" />
                 <div class="absolute bottom-0 right-0 bg-on-background/70 text-surface-container-lowest text-[10px] font-bold px-1 rounded-tl-md">
                   x${item.units}
                 </div>
               </div>
               <div class="flex-1 min-w-0">
                 <div class="flex items-start justify-between gap-space-xs">
-                  <h3 class="font-headline-title text-headline-title text-on-surface truncate">${item.product_name}</h3>
+                  <h3 class="font-headline-title text-headline-title text-on-surface truncate font-semibold">${item.product_name}</h3>
                   <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full ${pillBadgeClass} font-label-badge text-label-badge flex-shrink-0">
                     <span class="material-symbols-outlined text-[14px]">${pillIcon}</span>
                     ${item.days_left} days
@@ -622,18 +621,18 @@
                   Batch #${item.batch_code} • ${item.units} Units in stock
                 </p>
                 <div class="flex items-center gap-space-sm mt-1 font-metadata-compact text-metadata-compact">
-                  <span class="text-on-surface-variant">Cost: ₹${item.cost_price}</span>
+                  <span class="text-on-surface-variant font-medium">Cost: ₹${item.cost_price}</span>
                   <span class="text-outline">•</span>
                   <span class="text-outline line-through">MRP: ₹${item.mrp}</span>
                 </div>
               </div>
             </div>
-            
+
             <!-- Suggested Price Container -->
             <div class="mt-space-md p-space-sm bg-surface-container-low rounded-lg flex items-center justify-between">
               <div>
                 <div class="flex items-center gap-space-xs">
-                  <span class="font-headline-metric text-headline-metric text-on-surface">₹${item.suggested_price}</span>
+                  <span class="font-headline-metric text-headline-metric text-on-surface font-bold">₹${item.suggested_price}</span>
                   <span class="font-label-badge text-label-badge bg-primary/15 text-primary px-1.5 py-0.5 rounded font-bold">${item.discount_pct}% OFF</span>
                 </div>
                 <span class="font-label-micro text-label-micro text-outline">Was ₹${item.mrp}</span>
@@ -649,15 +648,15 @@
             <!-- Action Buttons -->
             <div class="mt-space-md grid grid-cols-2 gap-space-sm">
               <button 
-                class="h-12 rounded-full bg-surface-container text-on-surface font-body-medium text-body-medium flex items-center justify-center gap-space-xs active:scale-95 transition-all" 
+                class="h-12 rounded-full bg-surface-container text-on-surface font-body-medium text-body-medium flex items-center justify-center gap-space-xs active:scale-95 transition" 
                 onclick="window.dismissClearance('${item.id}')" 
                 type="button">
                 <span class="material-symbols-outlined text-[18px]">close</span>
                 Dismiss
               </button>
               <button 
-                class="h-12 rounded-full bg-primary-container text-on-primary font-body-medium text-body-medium flex items-center justify-center gap-space-xs shadow-md active:scale-95 transition-all font-semibold" 
-                onclick="window.acceptClearance('${item.id}', '${item.product_name.replace(/'/g, "\\'")}', '₹${item.suggested_price}')" 
+                class="h-12 rounded-full bg-primary-container text-on-primary font-body-medium text-body-medium flex items-center justify-center gap-space-xs shadow-md active:scale-95 transition font-semibold" 
+                onclick="window.acceptClearance('${item.id}', '${item.batch_id}', ${item.units}, ${item.suggested_price}, '${item.product_name.replace(/'/g, "\\'")}')" 
                 type="button">
                 <span class="material-symbols-outlined text-[20px]">check</span>
                 Accept
@@ -669,55 +668,52 @@
       .join('');
   }
 
-  window.acceptClearance = function (id, name, price) {
-    const card = document.querySelector(`[data-id="${id}"]`);
-    if (card) {
-      card.classList.add('scale-95', 'opacity-0');
-      setTimeout(() => {
-        window.SkitDB.acceptMarkdown(id);
-        showToast(`${name} marked down to ${price} on POS!`);
-        renderClearance();
+  window.acceptClearance = async function (cardId, batchId, units, price, name) {
+    const card = document.querySelector(`[data-id="${cardId}"]`);
+    if (card) card.classList.add('scale-95', 'opacity-0');
+
+    try {
+      await window.SkitDB.deductBatchStock(batchId, units, 'discounted', price);
+      showToast(`${name} marked down to ₹${price} on POS!`);
+      setTimeout(async () => {
+        await renderClearance();
       }, 250);
+    } catch (e) {
+      showToast('Error accepting clearance', false);
     }
   };
 
-  window.dismissClearance = function (id) {
-    const card = document.querySelector(`[data-id="${id}"]`);
+  window.dismissClearance = function (cardId) {
+    const card = document.querySelector(`[data-id="${cardId}"]`);
     if (card) {
       card.classList.add('translate-x-full', 'opacity-0');
       setTimeout(() => {
-        window.SkitDB.dismissMarkdown(id);
-        showToast('Markdown suggestion dismissed', false);
-        renderClearance();
+        card.remove();
+        showToast('Clearance recommendation dismissed', false);
       }, 250);
     }
   };
 
-  window.bulkAcceptClearance = function () {
-    const cards = document.querySelectorAll('.suggestion-card');
-    if (cards.length === 0) return;
+  window.bulkAcceptClearance = async function () {
+    const markdowns = await window.SkitDB.getMarkdowns();
+    if (markdowns.length === 0) return;
 
-    cards.forEach((card, index) => {
-      setTimeout(() => {
-        card.classList.add('scale-95', 'opacity-0');
-      }, index * 80);
-    });
+    for (const m of markdowns) {
+      await window.SkitDB.deductBatchStock(m.batch_id, m.units, 'discounted', m.suggested_price);
+    }
 
-    setTimeout(() => {
-      const count = window.SkitDB.bulkAcceptAllMarkdowns();
-      showToast(`All ${count} markdowns pushed to POS system!`);
-      renderClearance();
-    }, cards.length * 80 + 200);
+    showToast(`All ${markdowns.length} markdowns pushed to POS system!`);
+    await renderClearance();
   };
 
   // -------------------------------------------------------------
-  // Screen: Full Inventory (Browser & Filter)
+  // Screen: Inventory Catalog
   // -------------------------------------------------------------
   let inventoryCategoryFilter = 'all';
 
-  function renderInventory() {
-    const products = window.SkitDB.getProducts();
-    const batches = window.SkitDB.getBatches();
+  async function renderInventory() {
+    const products = await window.SkitDB.getProducts();
+    const batches = await window.SkitDB.getBatches();
     const searchInput = document.getElementById('inventory-search');
     const query = (searchInput ? searchInput.value : '').toLowerCase().trim();
 
@@ -734,8 +730,10 @@
 
     if (filtered.length === 0) {
       container.innerHTML = `
-        <div class="bg-surface-container-lowest rounded-2xl p-6 text-center text-on-surface-variant">
-          No matching products found.
+        <div class="bg-surface-container-lowest rounded-2xl p-8 text-center text-on-surface-variant flex flex-col items-center">
+          <span class="material-symbols-outlined text-[36px] text-outline mb-2">search_off</span>
+          <p class="font-body-medium text-body-medium font-semibold text-on-surface">No Products Found</p>
+          <p class="text-xs text-on-surface-variant mt-1">Tap the Scan button to add stock.</p>
         </div>
       `;
       return;
@@ -756,12 +754,12 @@
 
         return `
           <div class="bg-surface-container-lowest rounded-xl p-space-md shadow-sm flex items-center gap-space-md">
-            <div class="w-14 h-14 rounded-xl bg-surface-container-low overflow-hidden flex-shrink-0">
-              <img src="${p.image_url}" alt="${p.name}" class="w-full h-full object-cover" onerror="this.src='assets/images/shelf_illustration.png'" />
+            <div class="w-14 h-14 rounded-xl bg-surface-container-low overflow-hidden flex-shrink-0 flex items-center justify-center">
+              <img src="${p.image_url || 'assets/images/shelf_illustration.png'}" alt="${p.name}" class="w-full h-full object-cover" onerror="this.src='assets/images/shelf_illustration.png'" />
             </div>
             <div class="flex-1 min-w-0">
               <div class="flex items-center justify-between gap-1">
-                <h4 class="font-body-medium text-body-medium text-on-surface truncate">${p.name}</h4>
+                <h4 class="font-body-medium text-body-medium text-on-surface truncate font-semibold">${p.name}</h4>
                 ${expiryBadge}
               </div>
               <div class="flex items-center gap-2 mt-0.5 font-metadata-compact text-metadata-compact text-on-surface-variant">
@@ -797,151 +795,113 @@
   };
 
   // -------------------------------------------------------------
-  // Screen: Settings & Supabase Configuration
+  // Screen: Settings & Store Profile (NO Credentials Form)
   // -------------------------------------------------------------
-  function renderSettings() {
+  async function renderSettings() {
     const merchant = window.SkitDB.getMerchant();
-    const config = window.SkitDB.getSupabaseConfig();
+    if (!merchant) return;
 
     const nameInput = document.getElementById('settings-store-name');
     const locInput = document.getElementById('settings-store-loc');
-    const phoneInput = document.getElementById('settings-store-phone');
-    const urlInput = document.getElementById('settings-supabase-url');
-    const keyInput = document.getElementById('settings-supabase-key');
+    const phoneEl = document.getElementById('settings-merchant-phone');
     const statusPill = document.getElementById('settings-supabase-status');
 
     if (nameInput) nameInput.value = merchant.store_name || '';
     if (locInput) locInput.value = merchant.location || '';
-    if (phoneInput) phoneInput.value = merchant.phone || '';
-    if (urlInput) urlInput.value = config.url || '';
-    if (keyInput) keyInput.value = config.key || '';
+    if (phoneEl) phoneEl.textContent = '+91 ' + merchant.phone;
 
     if (statusPill) {
-      if (config.url && config.key) {
+      if (window.SkitDB.supabase) {
         statusPill.innerHTML = `
           <span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
-          <span class="text-primary font-semibold">Configured</span>
+          <span class="text-primary font-semibold">Supabase Cloud Connected</span>
         `;
       } else {
         statusPill.innerHTML = `
           <span class="w-2 h-2 rounded-full bg-secondary"></span>
-          <span class="text-secondary font-semibold">Offline Local Mode</span>
+          <span class="text-secondary font-semibold">Offline PWA Storage Active</span>
         `;
       }
     }
   }
 
-  window.saveStoreSettings = function () {
-    const store_name = document.getElementById('settings-store-name').value;
-    const location = document.getElementById('settings-store-loc').value;
-    const phone = document.getElementById('settings-store-phone').value;
-
-    window.SkitDB.saveMerchant({ store_name, location, phone });
-    showToast('Store profile saved successfully');
-  };
-
-  window.saveSupabaseConfig = async function () {
-    const url = document.getElementById('settings-supabase-url').value;
-    const key = document.getElementById('settings-supabase-key').value;
-    const testBtn = document.getElementById('settings-save-supabase-btn');
-
-    if (testBtn) testBtn.innerHTML = '<span class="material-symbols-outlined text-[18px] animate-spin">refresh</span> Testing...';
+  window.saveStoreSettings = async function () {
+    const store_name = document.getElementById('settings-store-name').value.trim();
+    const location = document.getElementById('settings-store-loc').value.trim();
 
     try {
-      if (url && key) {
-        await window.SkitDB.testSupabaseConnection(url, key);
-        window.SkitDB.setSupabaseConfig(url, key);
-        showToast('Connected to Supabase live database!');
-      } else {
-        window.SkitDB.setSupabaseConfig('', '');
-        showToast('Switched to Offline Local Storage mode');
-      }
+      await window.SkitDB.updateMerchantProfile({ store_name, location });
+      showToast('Store profile updated successfully');
     } catch (e) {
-      console.warn('Supabase connection warning', e);
-      window.SkitDB.setSupabaseConfig(url, key);
-      showToast('Config saved (offline fallback active)', false);
-    } finally {
-      if (testBtn) testBtn.innerHTML = '<span class="material-symbols-outlined text-[18px]">cloud_sync</span> Connect Supabase';
-      renderSettings();
+      showToast('Error updating store profile', false);
     }
   };
 
-  window.resetSampleData = function () {
-    if (confirm('Reset all demo inventory and batches to factory defaults?')) {
-      window.SkitDB.resetToDefaultData();
-      showToast('All sample Kirana data restored');
-      renderDashboard();
-      renderClearance();
-      renderInventory();
+  window.handleLogout = function () {
+    if (confirm('Are you sure you want to log out of your store?')) {
+      window.SkitDB.logout();
+      showToast('Logged out successfully');
+      navigateTo('welcome');
     }
   };
 
   // -------------------------------------------------------------
-  // Authentication & Signup
+  // Authentication & Registration Handlers (One-Time 1111 OTP)
   // -------------------------------------------------------------
-  window.handleLogin = function () {
+  window.handleLogin = async function () {
     const phone = document.getElementById('login-phone').value.trim();
     const pin = document.getElementById('login-pin').value.trim();
+    const btn = document.getElementById('btn-login-submit');
 
-    if (!phone || phone.length < 10) {
-      showToast('Please enter a valid 10-digit mobile number', false);
-      return;
-    }
-    if (!pin || pin.length !== 4) {
-      showToast('Please enter your 4-digit PIN', false);
-      return;
-    }
+    if (btn) btn.innerHTML = '<span class="material-symbols-outlined text-[18px] animate-spin">refresh</span> Logging in...';
 
-    // Save session
-    window.SkitDB.saveMerchant({ phone });
-    showToast('Login successful! Welcome back.');
-    navigateTo('dashboard');
+    try {
+      await window.SkitDB.loginMerchantWithPin(phone, pin);
+      showToast('Login successful! Welcome back.');
+      navigateTo('dashboard');
+    } catch (e) {
+      showToast(e.message || 'Login failed', false);
+    } finally {
+      if (btn) btn.innerHTML = '<span>Log In</span><span class="material-symbols-outlined text-[18px]">arrow_forward</span>';
+    }
   };
 
-  window.handleSignup = function () {
+  window.handleSignup = async function () {
     const phone = document.getElementById('signup-phone').value.trim();
     const otp = document.getElementById('signup-otp').value.trim();
     const pin = document.getElementById('signup-pin').value.trim();
-    const storeName = document.getElementById('signup-store-name').value.trim() || 'Gupta General Store';
-    const storeLoc = document.getElementById('signup-store-loc').value.trim() || 'Sector 14, Urban Estate';
+    const storeName = document.getElementById('signup-store-name').value.trim();
+    const storeLoc = document.getElementById('signup-store-loc').value.trim();
+    const btn = document.getElementById('btn-signup-submit');
 
-    if (!phone || phone.length < 10) {
-      showToast('Please enter a valid 10-digit mobile number', false);
+    if (!storeName) {
+      showToast('Please enter your Store Name', false);
       return;
     }
-    if (!otp) {
-      showToast('Please enter OTP (use 123456 for demo)', false);
-      return;
-    }
-    if (!pin || pin.length !== 4) {
-      showToast('Please set a 4-digit security PIN', false);
+    if (!storeLoc) {
+      showToast('Please enter your Store Location', false);
       return;
     }
 
-    window.SkitDB.saveMerchant({
-      phone,
-      pin,
-      store_name: storeName,
-      location: storeLoc
-    });
+    if (btn) btn.innerHTML = '<span class="material-symbols-outlined text-[18px] animate-spin">refresh</span> Verifying OTP & Registering...';
 
-    showToast('Merchant registered successfully!');
-    navigateTo('dashboard');
+    try {
+      // One-time 1111 OTP bypass verification & save to Supabase merchants table
+      await window.SkitDB.registerMerchantWithOTP(phone, otp, pin, storeName, storeLoc);
+      showToast('Store registered and verified successfully!');
+      navigateTo('dashboard');
+    } catch (e) {
+      showToast(e.message || 'Registration failed', false);
+    } finally {
+      if (btn) btn.innerHTML = '<span>Verify &amp; Register</span><span class="material-symbols-outlined text-[18px]">arrow_forward</span>';
+    }
   };
 
-  window.quickFillDemoLogin = function () {
-    const phoneInput = document.getElementById('login-phone');
-    const pinInput = document.getElementById('login-pin');
-    if (phoneInput) phoneInput.value = '9876543210';
-    if (pinInput) pinInput.value = '1234';
-    showToast('Demo credentials filled');
-  };
-
-  window.requestDemoOTP = function () {
+  window.requestLaunchOTP = function () {
     const otpInput = document.getElementById('signup-otp');
     if (otpInput) {
-      otpInput.value = '123456';
-      showToast('Demo OTP auto-filled: 123456');
+      otpInput.value = '1111';
+      showToast('Launch test OTP filled: 1111');
     }
   };
 
@@ -952,15 +912,13 @@
   };
 
   // -------------------------------------------------------------
-  // Event Listeners & Bootstrapping
+  // PWA Support & Lifecycles
   // -------------------------------------------------------------
-  window.addEventListener('hashchange', handleRoute);
-
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredInstallPrompt = e;
-    const installBanner = document.getElementById('pwa-install-banner');
-    if (installBanner) installBanner.classList.remove('hidden');
+    const banner = document.getElementById('pwa-install-banner');
+    if (banner) banner.classList.remove('hidden');
   });
 
   window.installPWA = function () {
@@ -970,29 +928,29 @@
         deferredInstallPrompt = null;
       });
     } else {
-      showToast('To install: Tap browser menu and select "Add to Home Screen"');
+      showToast('To install: Tap your browser menu and choose "Add to Home screen"');
     }
   };
 
-  // Register Service Worker for offline PWA
+  // Register Service Worker
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker
         .register('/sw.js')
         .then((reg) => console.log('[SKIT PWA] Service Worker registered:', reg.scope))
-        .catch((err) => console.warn('[SKIT PWA] Service Worker registration failed:', err));
+        .catch((err) => console.warn('[SKIT PWA] Service Worker registration error:', err));
     });
   }
 
-  // Initial load
+  // Hash Navigation Handler
+  window.addEventListener('hashchange', handleRoute);
+
   document.addEventListener('DOMContentLoaded', () => {
-    // If no hash, default to #welcome
     if (!window.location.hash) {
       window.location.hash = '#welcome';
     }
     handleRoute();
 
-    // Setup inventory search live listener
     const invSearch = document.getElementById('inventory-search');
     if (invSearch) {
       invSearch.addEventListener('input', renderInventory);
