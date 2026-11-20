@@ -199,29 +199,25 @@
       if (batches.length === 0) {
         queueContainer.innerHTML = `
           <div class="bg-surface-container-lowest rounded-2xl p-6 text-center shadow-sm flex flex-col items-center">
-            <div class="w-14 h-14 rounded-full bg-primary/10 text-primary mx-auto flex items-center justify-center mb-3">
-              <span class="material-symbols-outlined text-[32px]">inventory_2</span>
+            <div class="w-12 h-12 rounded-full bg-primary/10 text-primary mx-auto flex items-center justify-center mb-2">
+              <span class="material-symbols-outlined text-[28px]">inventory_2</span>
             </div>
-            <h4 class="font-headline-title text-headline-title text-on-surface font-bold text-lg">No Inventory Batches Yet</h4>
-            <p class="font-body-default text-body-default text-on-surface-variant mt-1 max-w-xs text-sm">
-              Your store is ready! Tap below to scan incoming stock and track expiry dates automatically.
-            </p>
-            <button onclick="location.hash='#scan'" class="mt-4 px-5 py-2.5 bg-primary text-on-primary rounded-xl font-label-badge text-label-badge font-semibold flex items-center gap-1.5 active:scale-95 transition shadow-md">
-              <span class="material-symbols-outlined text-[18px]">qr_code_scanner</span>
-              Scan First Stock Intake
+            <h4 class="font-bold text-sm text-on-surface">No Items Yet</h4>
+            <p class="text-xs text-on-surface-variant mt-1">Tap Scan below to add your first stock.</p>
+            <button onclick="location.hash='#scan'" class="mt-3 px-4 py-2 bg-primary text-on-primary rounded-xl text-xs font-semibold flex items-center gap-1 active:scale-95 transition">
+              <span class="material-symbols-outlined text-[16px]">qr_code_scanner</span>
+              Scan Stock
             </button>
           </div>
         `;
       } else {
         queueContainer.innerHTML = `
           <div class="bg-surface-container-lowest rounded-2xl p-6 text-center shadow-sm flex flex-col items-center">
-            <div class="w-14 h-14 rounded-full bg-primary/10 text-primary mx-auto flex items-center justify-center mb-3">
-              <span class="material-symbols-outlined text-[32px]">verified</span>
+            <div class="w-12 h-12 rounded-full bg-primary/10 text-primary mx-auto flex items-center justify-center mb-2">
+              <span class="material-symbols-outlined text-[28px]">verified</span>
             </div>
-            <h4 class="font-headline-title text-headline-title text-on-surface font-bold text-lg">All Batches Fresh &amp; Safe</h4>
-            <p class="font-body-default text-body-default text-on-surface-variant mt-1 max-w-xs text-sm">
-              None of your ${batches.length} active batches are expiring within the next 7 days.
-            </p>
+            <h4 class="font-bold text-sm text-on-surface">All Fresh</h4>
+            <p class="text-xs text-on-surface-variant mt-1">No batches expiring within 7 days.</p>
           </div>
         `;
       }
@@ -233,57 +229,46 @@
       .map((item) => {
         const badgeClass =
           item.days_left <= 1
-            ? 'bg-error text-on-error shadow-sm'
+            ? 'bg-error text-on-error font-bold'
             : item.days_left <= 3
             ? 'bg-tertiary-fixed text-on-tertiary-fixed font-bold'
             : 'bg-secondary-fixed text-on-secondary-fixed font-semibold';
 
         const daysLabel =
           item.days_left === 1
-            ? 'Expires Tomorrow'
+            ? 'Tomorrow'
             : item.days_left === 0
-            ? 'Expires Today'
-            : `Expires in ${item.days_left} Days`;
+            ? 'Today'
+            : `${item.days_left}d left`;
 
         return `
-          <div class="bg-surface-container-lowest rounded-xl p-space-md shadow-sm transition-all duration-200" id="card-${item.id}">
-            <div class="flex gap-space-md items-start">
-              <div class="relative w-16 h-16 rounded-xl overflow-hidden bg-surface-container-low flex-shrink-0 flex items-center justify-center">
+          <div class="bg-surface-container-lowest rounded-xl p-3 shadow-sm border border-outline-variant/20" id="card-${item.id}">
+            <div class="flex gap-3 items-center">
+              <div class="w-14 h-14 rounded-xl overflow-hidden bg-surface-container-low shrink-0 flex items-center justify-center">
                 <img class="w-full h-full object-cover" src="${item.product_image || 'assets/images/shelf_illustration.png'}" alt="${item.product_name}" onerror="this.src='assets/images/shelf_illustration.png'" />
               </div>
               <div class="flex-1 min-w-0">
-                <div class="flex items-start justify-between gap-1">
-                  <h4 class="font-body-medium text-body-medium text-on-surface truncate font-semibold">${item.product_name}</h4>
-                  <span class="inline-flex items-center px-2 py-0.5 rounded-full ${badgeClass} font-label-badge text-label-badge whitespace-nowrap">
+                <div class="flex items-center justify-between gap-1">
+                  <h4 class="text-sm font-semibold text-on-surface truncate">${item.product_name}</h4>
+                  <span class="px-2 py-0.5 rounded-full ${badgeClass} text-[10px] whitespace-nowrap">
                     ${daysLabel}
                   </span>
                 </div>
-                <p class="font-metadata-compact text-metadata-compact text-on-surface-variant mt-0.5">
-                  Batch #${item.batch_code} • <span class="font-bold text-on-surface">${item.quantity_on_hand}</span> ${item.unit}
-                </p>
-                <div class="mt-3 flex items-center gap-2">
-                  <button 
-                    class="flex-1 h-9 rounded-lg bg-primary-container text-on-primary font-label-badge text-label-badge flex items-center justify-center gap-1 active:scale-95 transition shadow-sm font-medium" 
-                    onclick="window.openSoldModal('${item.id}', '${item.product_name.replace(/'/g, "\\'")}', ${item.quantity_on_hand}, '${item.unit}', ${item.mrp})">
-                    <span class="material-symbols-outlined text-[16px]">sell</span>
-                    Item Sold
-                  </button>
-                  <button 
-                    class="px-2.5 h-9 rounded-lg bg-surface-container-high text-on-surface font-label-badge text-label-badge flex items-center justify-center gap-1 active:scale-95 transition" 
-                    onclick="window.quickApplyDiscount('${item.id}', 20)">
-                    <span class="material-symbols-outlined text-[15px] text-primary">percent</span>
-                    20% Off
-                  </button>
-                  <button 
-                    aria-label="Return to Vendor" 
-                    title="Return to Vendor"
-                    class="px-2.5 h-9 rounded-lg bg-error-container text-on-error-container font-label-badge text-label-badge flex items-center justify-center gap-0.5 active:scale-95 transition" 
-                    onclick="window.triggerRTV('${item.id}', '${item.product_name.replace(/'/g, "\\'")}', ${item.quantity_on_hand})">
-                    <span class="material-symbols-outlined text-[15px]">delete_sweep</span>
-                    RTV
-                  </button>
+                <div class="flex items-center justify-between mt-1">
+                  <span class="text-xs text-on-surface-variant">
+                    Stock: <strong class="text-on-surface">${item.quantity_on_hand}</strong> ${item.unit}
+                  </span>
+                  <span class="text-xs font-bold text-primary">₹${item.mrp}</span>
                 </div>
               </div>
+            </div>
+            <div class="mt-2.5">
+              <button 
+                class="w-full h-9 rounded-lg bg-primary text-on-primary text-xs font-semibold flex items-center justify-center gap-1.5 active:scale-98 transition shadow-sm" 
+                onclick="window.openSoldModal('${item.id}', '${item.product_name.replace(/'/g, "\\'")}', ${item.quantity_on_hand}, '${item.unit}', ${item.mrp})">
+                <span class="material-symbols-outlined text-[16px]">sell</span>
+                Record Sale
+              </button>
             </div>
           </div>
         `;
@@ -601,68 +586,49 @@
         const pillIcon = isUrgent ? 'warning' : 'timer';
 
         return `
-          <article class="suggestion-card bg-surface-container-lowest rounded-xl p-space-md shadow-md transition-all duration-300" data-id="${item.id}">
-            <div class="flex items-start gap-space-md">
-              <div class="w-16 h-16 rounded-xl bg-surface-container overflow-hidden flex-shrink-0 relative flex items-center justify-center">
+          <article class="suggestion-card bg-surface-container-lowest rounded-xl p-3 shadow-sm border border-outline-variant/20 transition-all duration-300" data-id="${item.id}">
+            <div class="flex items-center gap-3">
+              <div class="w-14 h-14 rounded-xl bg-surface-container overflow-hidden shrink-0 relative flex items-center justify-center">
                 <img alt="${item.product_name}" class="w-full h-full object-cover" src="${item.product_image || 'assets/images/shelf_illustration.png'}" onerror="this.src='assets/images/shelf_illustration.png'" />
-                <div class="absolute bottom-0 right-0 bg-on-background/70 text-surface-container-lowest text-[10px] font-bold px-1 rounded-tl-md">
-                  x${item.units}
+                <div class="absolute bottom-0 right-0 bg-on-background/70 text-surface-container-lowest text-[9px] font-bold px-1 rounded-tl">
+                  ${item.units}x
                 </div>
               </div>
               <div class="flex-1 min-w-0">
-                <div class="flex items-start justify-between gap-space-xs">
-                  <h3 class="font-headline-title text-headline-title text-on-surface truncate font-semibold">${item.product_name}</h3>
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full ${pillBadgeClass} font-label-badge text-label-badge flex-shrink-0">
-                    <span class="material-symbols-outlined text-[14px]">${pillIcon}</span>
-                    ${item.days_left} days
+                <div class="flex items-center justify-between gap-1">
+                  <h3 class="text-sm font-semibold text-on-surface truncate">${item.product_name}</h3>
+                  <span class="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full ${pillBadgeClass} text-[10px] shrink-0">
+                    <span class="material-symbols-outlined text-[12px]">${pillIcon}</span>
+                    ${item.days_left}d left
                   </span>
                 </div>
-                <p class="font-metadata-compact text-metadata-compact text-outline mt-0.5">
-                  Batch #${item.batch_code} • ${item.units} Units in stock
-                </p>
-                <div class="flex items-center gap-space-sm mt-1 font-metadata-compact text-metadata-compact">
-                  <span class="text-on-surface-variant font-medium">Cost: ₹${item.cost_price}</span>
-                  <span class="text-outline">•</span>
-                  <span class="text-outline line-through">MRP: ₹${item.mrp}</span>
+                <div class="flex items-center gap-2 mt-1">
+                  <span class="text-base font-bold text-on-surface">₹${item.suggested_price}</span>
+                  <span class="text-[10px] bg-primary/15 text-primary px-1.5 py-0.5 rounded font-bold">${item.discount_pct}% OFF</span>
+                  <span class="text-xs text-outline line-through">₹${item.mrp}</span>
                 </div>
               </div>
             </div>
 
-            <!-- Suggested Price Container -->
-            <div class="mt-space-md p-space-sm bg-surface-container-low rounded-lg flex items-center justify-between">
-              <div>
-                <div class="flex items-center gap-space-xs">
-                  <span class="font-headline-metric text-headline-metric text-on-surface font-bold">₹${item.suggested_price}</span>
-                  <span class="font-label-badge text-label-badge bg-primary/15 text-primary px-1.5 py-0.5 rounded font-bold">${item.discount_pct}% OFF</span>
-                </div>
-                <span class="font-label-micro text-label-micro text-outline">Was ₹${item.mrp}</span>
-              </div>
-              <div class="text-right">
-                <span class="inline-flex items-center gap-1 font-label-badge text-label-badge text-primary bg-surface-container-lowest px-2 py-1 rounded-full shadow-sm font-semibold">
-                  <span class="material-symbols-outlined text-[14px]">format_image_left</span>
-                  +₹${item.unit_profit}/unit profit
-                </span>
-              </div>
-            </div>
-
-            <!-- Action Buttons -->
-            <div class="mt-space-md grid grid-cols-2 gap-space-sm">
+            <!-- Action -->
+            <div class="mt-2.5 flex items-center gap-2">
               <button 
-                class="h-12 rounded-full bg-surface-container text-on-surface font-body-medium text-body-medium flex items-center justify-center gap-space-xs active:scale-95 transition" 
-                onclick="window.dismissClearance('${item.id}')" 
-                type="button">
-                <span class="material-symbols-outlined text-[18px]">close</span>
-                Dismiss
-              </button>
-              <button 
-                class="h-12 rounded-full bg-primary-container text-on-primary font-body-medium text-body-medium flex items-center justify-center gap-space-xs shadow-md active:scale-95 transition font-semibold" 
+                class="flex-1 h-9 rounded-lg bg-primary text-on-primary text-xs font-semibold flex items-center justify-center gap-1 active:scale-98 transition shadow-sm" 
                 onclick="window.acceptClearance('${item.id}', '${item.batch_id}', ${item.units}, ${item.suggested_price}, '${item.product_name.replace(/'/g, "\\'")}')" 
                 type="button">
-                <span class="material-symbols-outlined text-[20px]">check</span>
-                Accept
+                <span class="material-symbols-outlined text-[16px]">check</span>
+                Accept ₹${item.suggested_price}
+              </button>
+              <button 
+                class="w-9 h-9 rounded-lg bg-surface-container text-on-surface flex items-center justify-center active:scale-95 transition" 
+                onclick="window.dismissClearance('${item.id}')" 
+                title="Dismiss"
+                type="button">
+                <span class="material-symbols-outlined text-[16px]">close</span>
               </button>
             </div>
           </article>
+        `;
         `;
       })
       .join('');

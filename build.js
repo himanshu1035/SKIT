@@ -30,6 +30,7 @@ const itemsToCopy = [
   'assets',
   'js',
   'env.js',
+  'api',
   'stitch_skit_inventory_design_system'
 ];
 
