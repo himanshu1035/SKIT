@@ -425,29 +425,35 @@
   }
 
   function updateScannerDisplay() {
-    const arBarcode = document.getElementById('scan-ar-barcode');
-    const arExpiry = document.getElementById('scan-ar-expiry');
-    if (arBarcode) arBarcode.textContent = `${scannerState.barcode} (100%)`;
-    if (arExpiry) arExpiry.textContent = `EXP: ${formatDateHuman(scannerState.expiryDate)}`;
-
     const nameEl = document.getElementById('scan-product-name');
     const mrpEl = document.getElementById('scan-product-mrp');
+    const costEl = document.getElementById('scan-product-cost');
     const catEl = document.getElementById('scan-product-category');
     const barcodeEl = document.getElementById('scan-product-barcode');
     const batchCodeEl = document.getElementById('scan-batch-code');
-    const expiryEl = document.getElementById('scan-expiry-date');
+    const expiryInput = document.getElementById('scan-expiry-input');
     const shelfLifeEl = document.getElementById('scan-shelf-life');
     const countEl = document.getElementById('intake-count');
 
     if (nameEl) nameEl.textContent = scannerState.name;
     if (mrpEl) mrpEl.textContent = `₹${scannerState.mrp}`;
+    if (costEl) costEl.textContent = `Cost: ₹${scannerState.cost_price}`;
     if (catEl) catEl.textContent = scannerState.category;
     if (barcodeEl) barcodeEl.textContent = scannerState.barcode;
-    if (batchCodeEl) batchCodeEl.textContent = `Batch: #${scannerState.batchCode}`;
-    if (expiryEl) expiryEl.textContent = formatDateHuman(scannerState.expiryDate);
-    if (shelfLifeEl) shelfLifeEl.textContent = `${scannerState.daysLeft} Days`;
+    if (batchCodeEl) batchCodeEl.textContent = `#${scannerState.batchCode}`;
+    if (expiryInput) expiryInput.value = scannerState.expiryDate;
+    if (shelfLifeEl) shelfLifeEl.textContent = `${scannerState.daysLeft}d life`;
     if (countEl) countEl.textContent = scannerState.quantity;
   }
+
+  window.handleScannerExpiryChange = function (newDate) {
+    if (!newDate) return;
+    scannerState.expiryDate = newDate;
+    const days = Math.ceil((new Date(newDate) - new Date()) / (1000 * 60 * 60 * 24));
+    scannerState.daysLeft = Math.max(0, days);
+    const shelfLifeEl = document.getElementById('scan-shelf-life');
+    if (shelfLifeEl) shelfLifeEl.textContent = `${scannerState.daysLeft}d life`;
+  };
 
   async function initCameraFeed() {
     const video = document.getElementById('scanner-video');
