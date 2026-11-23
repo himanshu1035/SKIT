@@ -189,57 +189,74 @@
 
     // Filter batches needing priority action (<= 7 days)
     const priorityQueue = batches.filter((b) => b.days_left <= 7);
-    if (actionCountEl) actionCountEl.textContent = priorityQueue.length + ' items';
+    const sectionTitleEl = document.getElementById('dash-section-title');
+    if (sectionTitleEl) {
+      sectionTitleEl.textContent = priorityQueue.length > 0 ? 'Action Required' : 'Stock Inventory';
+    }
+    if (actionCountEl) {
+      actionCountEl.textContent = priorityQueue.length > 0 
+        ? priorityQueue.length + ' urgent' 
+        : batches.length + ' active items';
+      actionCountEl.className = priorityQueue.length > 0 
+        ? 'text-xs font-semibold text-error' 
+        : 'text-xs font-semibold text-primary';
+    }
 
     const queueContainer = document.getElementById('dashboard-action-queue');
     if (!queueContainer) return;
 
-    // Empty State when new store has 0 batches or zero expiring items
-    if (priorityQueue.length === 0) {
-      if (batches.length === 0) {
-        queueContainer.innerHTML = `
-          <div class="bg-surface-container-lowest rounded-2xl p-6 text-center shadow-sm flex flex-col items-center">
-            <div class="w-12 h-12 rounded-full bg-primary/10 text-primary mx-auto flex items-center justify-center mb-2">
-              <span class="material-symbols-outlined text-[28px]">inventory_2</span>
-            </div>
-            <h4 class="font-bold text-sm text-on-surface">No Items Yet</h4>
-            <p class="text-xs text-on-surface-variant mt-1">Tap Scan below to add your first stock.</p>
-            <button onclick="location.hash='#scan'" class="mt-3 px-4 py-2 bg-primary text-on-primary rounded-xl text-xs font-semibold flex items-center gap-1 active:scale-95 transition">
-              <span class="material-symbols-outlined text-[16px]">qr_code_scanner</span>
-              Scan Stock
-            </button>
+    // Empty State when new store has 0 batches
+    if (batches.length === 0) {
+      queueContainer.innerHTML = `
+        <div class="bg-surface-container-lowest rounded-2xl p-6 text-center shadow-sm flex flex-col items-center">
+          <div class="w-12 h-12 rounded-full bg-primary/10 text-primary mx-auto flex items-center justify-center mb-2">
+            <span class="material-symbols-outlined text-[28px]">inventory_2</span>
           </div>
-        `;
-      } else {
-        queueContainer.innerHTML = `
-          <div class="bg-surface-container-lowest rounded-2xl p-6 text-center shadow-sm flex flex-col items-center">
-            <div class="w-12 h-12 rounded-full bg-primary/10 text-primary mx-auto flex items-center justify-center mb-2">
-              <span class="material-symbols-outlined text-[28px]">verified</span>
-            </div>
-            <h4 class="font-bold text-sm text-on-surface">All Fresh</h4>
-            <p class="text-xs text-on-surface-variant mt-1">No batches expiring within 7 days.</p>
-          </div>
-        `;
-      }
+          <h4 class="font-bold text-sm text-on-surface">No Items In Stock</h4>
+          <p class="text-xs text-on-surface-variant mt-1">Tap below to scan and track your first grocery item.</p>
+          <button onclick="location.hash='#scan'" class="mt-3 px-4 py-2 bg-primary text-on-primary rounded-xl text-xs font-semibold flex items-center gap-1 active:scale-95 transition shadow-sm">
+            <span class="material-symbols-outlined text-[16px]">qr_code_scanner</span>
+            Scan Stock Intake
+          </button>
+        </div>
+      `;
       return;
     }
 
-    // Render Live Priority Queue Cards
-    queueContainer.innerHTML = priorityQueue
+    // Reassurance banner when all items have > 7 days freshness
+    let bannerHTML = '';
+    if (priorityQueue.length === 0) {
+      bannerHTML = `
+        <div class="bg-primary/10 border border-primary/20 rounded-xl px-3 py-2 flex items-center justify-between mb-1">
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary text-[18px]">verified</span>
+            <span class="text-xs font-semibold text-primary">All stock fresh & safe</span>
+          </div>
+          <span class="text-[11px] text-on-surface-variant font-medium">${batches.length} active</span>
+        </div>
+      `;
+    }
+
+    // Render ALL active batches in FEFO order (earliest expiry first)
+    const cardsHTML = batches
       .map((item) => {
         const badgeClass =
           item.days_left <= 1
             ? 'bg-error text-on-error font-bold'
             : item.days_left <= 3
             ? 'bg-tertiary-fixed text-on-tertiary-fixed font-bold'
-            : 'bg-secondary-fixed text-on-secondary-fixed font-semibold';
+            : item.days_left <= 7
+            ? 'bg-secondary-fixed text-on-secondary-fixed font-semibold'
+            : 'bg-primary-fixed/25 text-primary font-semibold';
 
         const daysLabel =
           item.days_left === 1
             ? 'Tomorrow'
             : item.days_left === 0
             ? 'Today'
-            : `${item.days_left}d left`;
+            : item.days_left <= 7
+            ? `${item.days_left}d left`
+            : `Fresh • ${item.days_left}d`;
 
         return `
           <div class="bg-surface-container-lowest rounded-xl p-3 shadow-sm border border-outline-variant/20" id="card-${item.id}">
@@ -256,7 +273,7 @@
                 </div>
                 <div class="flex items-center justify-between mt-1">
                   <span class="text-xs text-on-surface-variant">
-                    Stock: <strong class="text-on-surface">${item.quantity_on_hand}</strong> ${item.unit}
+                    Batch #${item.batch_code} • <strong class="text-on-surface">${item.quantity_on_hand}</strong> ${item.unit}
                   </span>
                   <span class="text-xs font-bold text-primary">₹${item.mrp}</span>
                 </div>
@@ -274,6 +291,8 @@
         `;
       })
       .join('');
+
+    queueContainer.innerHTML = bannerHTML + cardsHTML;
   }
 
   // -------------------------------------------------------------
@@ -471,7 +490,7 @@
     if (!btn) return;
 
     const originalHTML = btn.innerHTML;
-    btn.innerHTML = `<span class="material-symbols-outlined text-[22px] animate-spin">refresh</span><span>Saving to Supabase...</span>`;
+    btn.innerHTML = `<span class="material-symbols-outlined text-[20px] animate-spin">refresh</span><span>Saving Stock...</span>`;
 
     try {
       // 1. Check if product exists in live database
@@ -492,26 +511,35 @@
       await window.SkitDB.addBatch({
         product_id: product.id,
         product_name: product.name,
+        product_category: product.category,
+        product_image: product.image_url,
+        mrp: product.mrp,
+        cost_price: product.cost_price,
+        unit: product.unit || 'units',
         batch_code: scannerState.batchCode,
         expiry_date: scannerState.expiryDate,
         quantity_on_hand: scannerState.quantity
       });
 
-      btn.innerHTML = `<span class="material-symbols-outlined text-[22px]">check_circle</span><span>Batch Added!</span>`;
+      btn.innerHTML = `<span class="material-symbols-outlined text-[20px]">check_circle</span><span>Batch Added!</span>`;
       btn.classList.remove('bg-primary');
       btn.classList.add('bg-primary-container');
 
       showToast(`Added ${scannerState.quantity} units of ${scannerState.name} to shelf!`);
+
+      // Rotate batch code for next intake
+      scannerState.batchCode = 'BT-' + Math.floor(1000 + Math.random() * 9000);
 
       setTimeout(() => {
         btn.innerHTML = originalHTML;
         btn.classList.remove('bg-primary-container');
         btn.classList.add('bg-primary');
         navigateTo('dashboard');
-      }, 1000);
+      }, 700);
     } catch (e) {
+      console.error('[confirmIntake error]', e);
       btn.innerHTML = originalHTML;
-      showToast('Error adding batch: ' + e.message, false);
+      showToast('Error adding batch: ' + (e.message || 'Check database'), false);
     }
   };
 
@@ -683,11 +711,35 @@
     const searchInput = document.getElementById('inventory-search');
     const query = (searchInput ? searchInput.value : '').toLowerCase().trim();
 
-    const filtered = products.filter((p) => {
+    // Reconstruct product records from batches if products list is empty
+    let allProducts = products;
+    if (allProducts.length === 0 && batches.length > 0) {
+      const seenIds = new Set();
+      allProducts = batches
+        .filter((b) => {
+          if (seenIds.has(String(b.product_id))) return false;
+          seenIds.add(String(b.product_id));
+          return true;
+        })
+        .map((b) => ({
+          id: b.product_id,
+          name: b.product_name || 'Item',
+          category: b.product_category || 'General',
+          mrp: b.mrp || 0,
+          cost_price: b.cost_price || 0,
+          unit: b.unit || 'units',
+          image_url: b.product_image,
+          barcode: b.batch_code || ''
+        }));
+    }
+
+    const filtered = allProducts.filter((p) => {
+      const pCat = (p.category || '').toLowerCase();
       const matchesCat =
         inventoryCategoryFilter === 'all' ||
-        p.category.toLowerCase().includes(inventoryCategoryFilter.toLowerCase());
-      const matchesQuery = !query || p.name.toLowerCase().includes(query) || p.barcode.includes(query);
+        pCat.includes(inventoryCategoryFilter.toLowerCase()) ||
+        (inventoryCategoryFilter === 'daily' && pCat.includes('staple'));
+      const matchesQuery = !query || (p.name && p.name.toLowerCase().includes(query)) || (p.barcode && String(p.barcode).includes(query));
       return matchesCat && matchesQuery;
     });
 
@@ -707,28 +759,30 @@
 
     container.innerHTML = filtered
       .map((p) => {
-        const prodBatches = batches.filter((b) => b.product_id === p.id && b.quantity_on_hand > 0);
+        const prodBatches = batches.filter((b) => String(b.product_id) === String(p.id) && b.quantity_on_hand > 0);
         const totalStock = prodBatches.reduce((sum, b) => sum + b.quantity_on_hand, 0);
         const nearestExpiry = prodBatches.length > 0 ? Math.min(...prodBatches.map((b) => b.days_left)) : null;
 
         const expiryBadge =
           nearestExpiry !== null
             ? nearestExpiry <= 3
-              ? `<span class="px-2 py-0.5 rounded-full bg-error-container text-on-error-container font-label-badge text-label-badge font-bold">${nearestExpiry}d left</span>`
-              : `<span class="px-2 py-0.5 rounded-full bg-primary-fixed/30 text-on-primary-fixed-variant font-label-badge text-label-badge font-bold">${nearestExpiry}d left</span>`
-            : `<span class="px-2 py-0.5 rounded-full bg-surface-container-high text-outline font-label-badge text-label-badge">Out of Stock</span>`;
+              ? `<span class="px-2 py-0.5 rounded-full bg-error-container text-on-error-container text-[10px] font-bold">${nearestExpiry}d left</span>`
+              : nearestExpiry <= 7
+              ? `<span class="px-2 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed text-[10px] font-bold">${nearestExpiry}d left</span>`
+              : `<span class="px-2 py-0.5 rounded-full bg-primary-fixed/25 text-primary text-[10px] font-bold">Fresh • ${nearestExpiry}d</span>`
+            : `<span class="px-2 py-0.5 rounded-full bg-surface-container-high text-outline text-[10px]">Out of Stock</span>`;
 
         return `
-          <div class="bg-surface-container-lowest rounded-xl p-space-md shadow-sm flex items-center gap-space-md">
-            <div class="w-14 h-14 rounded-xl bg-surface-container-low overflow-hidden flex-shrink-0 flex items-center justify-center">
+          <div class="bg-surface-container-lowest rounded-xl p-3 shadow-sm border border-outline-variant/20 flex items-center gap-3">
+            <div class="w-14 h-14 rounded-xl bg-surface-container-low overflow-hidden shrink-0 flex items-center justify-center">
               <img src="${p.image_url || 'assets/images/shelf_illustration.png'}" alt="${p.name}" class="w-full h-full object-cover" onerror="this.src='assets/images/shelf_illustration.png'" />
             </div>
             <div class="flex-1 min-w-0">
               <div class="flex items-center justify-between gap-1">
-                <h4 class="font-body-medium text-body-medium text-on-surface truncate font-semibold">${p.name}</h4>
+                <h4 class="text-sm font-semibold text-on-surface truncate">${p.name}</h4>
                 ${expiryBadge}
               </div>
-              <div class="flex items-center gap-2 mt-0.5 font-metadata-compact text-metadata-compact text-on-surface-variant">
+              <div class="flex items-center gap-2 mt-0.5 text-xs text-on-surface-variant">
                 <span>Stock: <strong class="text-on-surface font-semibold">${totalStock}</strong> ${p.unit}</span>
                 <span>•</span>
                 <span>MRP: ₹${p.mrp}</span>

@@ -110,6 +110,49 @@
     // -------------------------------------------------------------
     // Local Scoped Fallback Helpers (Per-Merchant Isolation)
     // -------------------------------------------------------------
+    _isValidUUID(id) {
+      return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(id || ''));
+    }
+
+    async _ensureValidMerchant() {
+      if (!this.currentMerchant) return null;
+      if (this.supabase && !this._isValidUUID(this.currentMerchant.id)) {
+        try {
+          const { data: dbMerchant } = await this.supabase
+            .from('merchants')
+            .select('*')
+            .eq('phone', this.currentMerchant.phone)
+            .limit(1);
+
+          if (dbMerchant && dbMerchant.length > 0) {
+            this.saveSession(dbMerchant[0]);
+            return dbMerchant[0];
+          }
+
+          const { data: created, error } = await this.supabase
+            .from('merchants')
+            .upsert([{
+              phone: this.currentMerchant.phone || '9876543210',
+              pin_hash: this.currentMerchant.pin_hash || '1111',
+              store_name: this.currentMerchant.store_name || 'My Kirana Store',
+              location: this.currentMerchant.location || 'Local Market',
+              otp_verified: true,
+              currency: 'INR'
+            }], { onConflict: 'phone' })
+            .select()
+            .single();
+
+          if (!error && created) {
+            this.saveSession(created);
+            return created;
+          }
+        } catch (e) {
+          console.warn('[Merchant UUID self-heal warning]', e);
+        }
+      }
+      return this.currentMerchant;
+    }
+
     _getStoreKey(table) {
       const merchantId = this.currentMerchant ? this.currentMerchant.id : 'anonymous';
       return `${LOCAL_CACHE_PREFIX}${merchantId}_${table}`;
@@ -349,38 +392,51 @@
     // Live Scoped Products
     // -------------------------------------------------------------
     async getProducts() {
+      await this.initPromise;
+      await this._ensureValidMerchant();
       if (!this.currentMerchant) return [];
       const merchantId = this.currentMerchant.id;
 
       if (this.supabase) {
-        const { data, error } = await this.supabase
-          .from('products')
-          .select('*')
-          .eq('merchant_id', merchantId)
-          .order('name', { ascending: true });
+        try {
+          const { data, error } = await this.supabase
+            .from('products')
+            .select('*')
+            .eq('merchant_id', merchantId)
+            .order('name', { ascending: true });
 
-        if (!error && data) {
-          this._setLocal('products', data);
-          return data;
+          if (!error && data) {
+            this._setLocal('products', data);
+            return data;
+          }
+          if (error) console.warn('[Supabase getProducts warning]:', error);
+        } catch (err) {
+          console.warn('[Supabase getProducts exception]:', err);
         }
       }
       return this._getLocal('products');
     }
 
     async getProductByBarcode(barcode) {
+      await this.initPromise;
+      await this._ensureValidMerchant();
       if (!this.currentMerchant) return null;
       const clean = String(barcode).trim();
       const merchantId = this.currentMerchant.id;
 
       if (this.supabase) {
-        const { data, error } = await this.supabase
-          .from('products')
-          .select('*')
-          .eq('merchant_id', merchantId)
-          .eq('barcode', clean)
-          .maybeSingle();
+        try {
+          const { data, error } = await this.supabase
+            .from('products')
+            .select('*')
+            .eq('merchant_id', merchantId)
+            .eq('barcode', clean)
+            .limit(1);
 
-        if (!error && data) return data;
+          if (!error && data && data.length > 0) return data[0];
+        } catch (err) {
+          console.warn('[Supabase getProductByBarcode exception]:', err);
+        }
       }
 
       const local = this._getLocal('products');
@@ -388,6 +444,8 @@
     }
 
     async addProduct(productData) {
+      await this.initPromise;
+      await this._ensureValidMerchant();
       if (!this.currentMerchant) throw new Error('Merchant session required');
       const merchantId = this.currentMerchant.id;
 
@@ -404,22 +462,32 @@
       };
 
       if (this.supabase) {
-        const { data, error } = await this.supabase
-          .from('products')
-          .insert([record])
-          .select()
-          .single();
+        try {
+          const { data, error } = await this.supabase
+            .from('products')
+            .insert([record])
+            .select()
+            .single();
 
-        if (error) {
-          console.error('[Supabase Add Product Error]', error);
-          throw new Error('Failed to save product to database: ' + error.message);
+          if (error) {
+            console.error('[Supabase Add Product Error]', error);
+            // Check if product already exists
+            const existing = await this.getProductByBarcode(record.barcode);
+            if (existing) return existing;
+            throw new Error('Failed to save product to database: ' + error.message);
+          }
+
+          const local = this._getLocal('products');
+          const existingIdx = local.findIndex((p) => p.id === data.id);
+          if (existingIdx >= 0) local[existingIdx] = data;
+          else local.push(data);
+          this._setLocal('products', local);
+          this.notify('products_updated');
+          return data;
+        } catch (err) {
+          console.error('[Supabase addProduct exception]:', err);
+          throw err;
         }
-
-        const local = this._getLocal('products');
-        local.push(data);
-        this._setLocal('products', local);
-        this.notify('products_updated');
-        return data;
       }
 
       record.id = 'prod-' + Date.now();
@@ -435,38 +503,64 @@
     // Live Scoped Batches & FEFO Queue
     // -------------------------------------------------------------
     async getBatches() {
+      await this.initPromise;
+      await this._ensureValidMerchant();
       if (!this.currentMerchant) return [];
       const merchantId = this.currentMerchant.id;
 
       if (this.supabase) {
-        const { data, error } = await this.supabase
-          .from('batches')
-          .select('*, products(*)')
-          .eq('merchant_id', merchantId)
-          .gt('quantity_on_hand', 0)
-          .order('expiry_date', { ascending: true });
+        try {
+          let { data, error } = await this.supabase
+            .from('batches')
+            .select('*, products(*)')
+            .eq('merchant_id', merchantId)
+            .gt('quantity_on_hand', 0)
+            .order('expiry_date', { ascending: true });
 
-        if (!error && data) {
-          const formatted = data.map((b) => {
-            const daysLeft = Math.ceil((new Date(b.expiry_date) - new Date()) / (1000 * 60 * 60 * 24));
-            const prod = b.products || {};
-            return {
-              id: b.id,
-              product_id: b.product_id,
-              product_name: prod.name || 'Unnamed Product',
-              product_category: prod.category || 'General',
-              product_image: prod.image_url || 'assets/images/shelf_illustration.png',
-              mrp: prod.mrp || 0,
-              cost_price: prod.cost_price || 0,
-              unit: prod.unit || 'units',
-              batch_code: b.batch_code,
-              expiry_date: b.expiry_date,
-              days_left: Math.max(0, daysLeft),
-              quantity_on_hand: b.quantity_on_hand
-            };
-          });
-          this._setLocal('batches', formatted);
-          return formatted;
+          if (error) {
+            console.warn('[Supabase getBatches join warning, running resilient fallback query]:', error);
+            const fallback = await this.supabase
+              .from('batches')
+              .select('*')
+              .eq('merchant_id', merchantId)
+              .gt('quantity_on_hand', 0)
+              .order('expiry_date', { ascending: true });
+
+            if (!fallback.error && fallback.data) {
+              const products = await this.getProducts();
+              const prodMap = new Map(products.map((p) => [String(p.id), p]));
+              data = fallback.data.map((b) => ({
+                ...b,
+                products: prodMap.get(String(b.product_id)) || {}
+              }));
+              error = null;
+            }
+          }
+
+          if (!error && data) {
+            const formatted = data.map((b) => {
+              const daysLeft = Math.ceil((new Date(b.expiry_date) - new Date()) / (1000 * 60 * 60 * 24));
+              const prod = b.products || {};
+              return {
+                id: b.id,
+                product_id: b.product_id,
+                product_name: prod.name || b.product_name || 'Item',
+                product_category: prod.category || 'General',
+                product_image: prod.image_url || 'assets/images/shelf_illustration.png',
+                mrp: prod.mrp || 0,
+                cost_price: prod.cost_price || 0,
+                unit: prod.unit || 'units',
+                batch_code: b.batch_code,
+                expiry_date: b.expiry_date,
+                days_left: Math.max(0, daysLeft),
+                quantity_on_hand: b.quantity_on_hand
+              };
+            });
+            this._setLocal('batches', formatted);
+            return formatted;
+          }
+        } catch (err) {
+          console.warn('[Supabase getBatches exception]:', err);
         }
       }
 
@@ -474,6 +568,8 @@
     }
 
     async addBatch(batchData) {
+      await this.initPromise;
+      await this._ensureValidMerchant();
       if (!this.currentMerchant) throw new Error('Merchant session required');
       const merchantId = this.currentMerchant.id;
 
@@ -486,10 +582,11 @@
       };
 
       if (this.supabase) {
+        // Use select() without embedding on mutations (PostgREST requirement)
         const { data, error } = await this.supabase
           .from('batches')
           .insert([record])
-          .select('*, products(*)')
+          .select()
           .single();
 
         if (error) {
@@ -497,15 +594,35 @@
           throw new Error('Failed to log batch: ' + error.message);
         }
 
-        this.notify('batch_added', data);
-        return data;
+        const daysLeft = Math.ceil((new Date(record.expiry_date) - new Date()) / (1000 * 60 * 60 * 24));
+        const formattedBatch = {
+          id: data.id,
+          product_id: record.product_id,
+          product_name: batchData.product_name || 'Item',
+          product_category: batchData.product_category || 'General',
+          product_image: batchData.product_image || 'assets/images/shelf_illustration.png',
+          mrp: batchData.mrp || 0,
+          cost_price: batchData.cost_price || 0,
+          unit: batchData.unit || 'units',
+          batch_code: record.batch_code,
+          expiry_date: record.expiry_date,
+          days_left: Math.max(0, daysLeft),
+          quantity_on_hand: record.quantity_on_hand
+        };
+
+        const localBatches = this._getLocal('batches');
+        localBatches.push(formattedBatch);
+        this._setLocal('batches', localBatches);
+
+        this.notify('batch_added', formattedBatch);
+        return formattedBatch;
       }
 
       // Local fallback
       const daysLeft = Math.ceil((new Date(record.expiry_date) - new Date()) / (1000 * 60 * 60 * 24));
       const localBatches = this._getLocal('batches');
       const localProducts = this._getLocal('products');
-      const prod = localProducts.find((p) => p.id === record.product_id) || {};
+      const prod = localProducts.find((p) => String(p.id) === String(record.product_id)) || {};
 
       const newBatch = {
         id: 'batch-' + Date.now(),
@@ -529,6 +646,8 @@
     }
 
     async deductBatchStock(batchId, quantity, type = 'sold', customPrice = null) {
+      await this.initPromise;
+      await this._ensureValidMerchant();
       if (!this.currentMerchant) return null;
       const merchantId = this.currentMerchant.id;
       const qty = Number(quantity);
@@ -561,6 +680,14 @@
           type,
           selling_price: sellingPrice
         }]);
+
+        // Keep local cache in sync
+        const batches = this._getLocal('batches');
+        const bIdx = batches.findIndex((b) => String(b.id) === String(batchId));
+        if (bIdx >= 0) {
+          batches[bIdx].quantity_on_hand = newQty;
+          this._setLocal('batches', batches);
+        }
 
         this.notify('stock_updated');
         return { batchId, remaining: newQty };
