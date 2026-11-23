@@ -14,11 +14,11 @@
 
   // Scanner Live Form State
   let scannerState = {
-    barcode: '8901260012345',
-    name: 'Packaged Grocery Item',
+    barcode: '',
+    name: '',
     category: 'Daily Staples',
-    mrp: 50,
-    cost_price: 40,
+    mrp: '',
+    cost_price: '',
     expiryDate: getFutureDate(30),
     daysLeft: 30,
     batchCode: 'BT-' + Math.floor(1000 + Math.random() * 9000),
@@ -408,16 +408,15 @@
   // Screen: Live Scanner & Intake (M1)
   // -------------------------------------------------------------
   async function renderScanner() {
-    const products = await window.SkitDB.getProducts();
-
-    // Populate default scanner state if merchant already has products
-    if (products.length > 0) {
-      const p = products[0];
-      scannerState.barcode = p.barcode;
-      scannerState.name = p.name;
-      scannerState.category = p.category;
-      scannerState.mrp = p.mrp;
-      scannerState.cost_price = p.cost_price;
+    if (!scannerState.barcode) {
+      scannerState.barcode = '890' + Math.floor(1000000000 + Math.random() * 9000000000);
+    }
+    if (!scannerState.batchCode) {
+      scannerState.batchCode = 'BT-' + Math.floor(1000 + Math.random() * 9000);
+    }
+    if (!scannerState.expiryDate) {
+      scannerState.expiryDate = getFutureDate(30);
+      scannerState.daysLeft = 30;
     }
 
     updateScannerDisplay();
@@ -425,34 +424,105 @@
   }
 
   function updateScannerDisplay() {
-    const nameEl = document.getElementById('scan-product-name');
-    const mrpEl = document.getElementById('scan-product-mrp');
-    const costEl = document.getElementById('scan-product-cost');
-    const catEl = document.getElementById('scan-product-category');
-    const barcodeEl = document.getElementById('scan-product-barcode');
-    const batchCodeEl = document.getElementById('scan-batch-code');
+    const nameInput = document.getElementById('scan-input-name');
+    const barcodeInput = document.getElementById('scan-input-barcode');
+    const mrpInput = document.getElementById('scan-input-mrp');
+    const costInput = document.getElementById('scan-input-cost');
+    const catInput = document.getElementById('scan-input-category');
     const expiryInput = document.getElementById('scan-expiry-input');
-    const shelfLifeEl = document.getElementById('scan-shelf-life');
-    const countEl = document.getElementById('intake-count');
+    const countInput = document.getElementById('intake-count-input');
+    const batchCodeEl = document.getElementById('scan-batch-code');
 
-    if (nameEl) nameEl.textContent = scannerState.name;
-    if (mrpEl) mrpEl.textContent = `₹${scannerState.mrp}`;
-    if (costEl) costEl.textContent = `Cost: ₹${scannerState.cost_price}`;
-    if (catEl) catEl.textContent = scannerState.category;
-    if (barcodeEl) barcodeEl.textContent = scannerState.barcode;
-    if (batchCodeEl) batchCodeEl.textContent = `#${scannerState.batchCode}`;
+    if (nameInput && scannerState.name) nameInput.value = scannerState.name;
+    if (barcodeInput && scannerState.barcode) barcodeInput.value = scannerState.barcode;
+    if (mrpInput && scannerState.mrp !== '') mrpInput.value = scannerState.mrp;
+    if (costInput && scannerState.cost_price !== '') costInput.value = scannerState.cost_price;
+    if (catInput && scannerState.category) catInput.value = scannerState.category;
     if (expiryInput) expiryInput.value = scannerState.expiryDate;
-    if (shelfLifeEl) shelfLifeEl.textContent = `${scannerState.daysLeft}d life`;
-    if (countEl) countEl.textContent = scannerState.quantity;
+    if (countInput) countInput.value = scannerState.quantity;
+    if (batchCodeEl) batchCodeEl.textContent = `Batch: #${scannerState.batchCode}`;
   }
+
+  window.handleBarcodeLookup = async function (barcode) {
+    const clean = String(barcode || '').trim();
+    scannerState.barcode = clean;
+    if (!clean) return;
+
+    try {
+      const existing = await window.SkitDB.getProductByBarcode(clean);
+      if (existing) {
+        scannerState.name = existing.name || scannerState.name;
+        scannerState.mrp = existing.mrp !== undefined ? existing.mrp : scannerState.mrp;
+        scannerState.cost_price = existing.cost_price !== undefined ? existing.cost_price : scannerState.cost_price;
+        scannerState.category = existing.category || scannerState.category;
+
+        const nameInput = document.getElementById('scan-input-name');
+        const mrpInput = document.getElementById('scan-input-mrp');
+        const costInput = document.getElementById('scan-input-cost');
+        const catInput = document.getElementById('scan-input-category');
+
+        if (nameInput) nameInput.value = scannerState.name;
+        if (mrpInput) mrpInput.value = scannerState.mrp;
+        if (costInput) costInput.value = scannerState.cost_price;
+        if (catInput) catInput.value = scannerState.category;
+
+        showToast(`Auto-filled: ${existing.name}`);
+      }
+    } catch (e) {
+      console.warn('[Barcode Lookup]', e);
+    }
+  };
+
+  window.generateRandomBarcode = function () {
+    const newBarcode = '890' + Math.floor(1000000000 + Math.random() * 9000000000);
+    scannerState.barcode = newBarcode;
+    const barcodeInput = document.getElementById('scan-input-barcode');
+    if (barcodeInput) barcodeInput.value = newBarcode;
+    showToast('Generated Barcode: ' + newBarcode);
+  };
+
+  window.resetScannerForm = function () {
+    scannerState.name = '';
+    scannerState.barcode = '890' + Math.floor(1000000000 + Math.random() * 9000000000);
+    scannerState.mrp = '';
+    scannerState.cost_price = '';
+    scannerState.category = 'Daily Staples';
+    scannerState.expiryDate = getFutureDate(30);
+    scannerState.daysLeft = 30;
+    scannerState.quantity = 1;
+    scannerState.batchCode = 'BT-' + Math.floor(1000 + Math.random() * 9000);
+
+    const nameInput = document.getElementById('scan-input-name');
+    const barcodeInput = document.getElementById('scan-input-barcode');
+    const mrpInput = document.getElementById('scan-input-mrp');
+    const costInput = document.getElementById('scan-input-cost');
+    const catInput = document.getElementById('scan-input-category');
+    const expiryInput = document.getElementById('scan-expiry-input');
+    const countInput = document.getElementById('intake-count-input');
+    const batchCodeEl = document.getElementById('scan-batch-code');
+
+    if (nameInput) nameInput.value = '';
+    if (barcodeInput) barcodeInput.value = scannerState.barcode;
+    if (mrpInput) mrpInput.value = '';
+    if (costInput) costInput.value = '';
+    if (catInput) catInput.value = scannerState.category;
+    if (expiryInput) expiryInput.value = scannerState.expiryDate;
+    if (countInput) countInput.value = 1;
+    if (batchCodeEl) batchCodeEl.textContent = `Batch: #${scannerState.batchCode}`;
+
+    showToast('Ready for new item!');
+    if (nameInput) nameInput.focus();
+  };
 
   window.handleScannerExpiryChange = function (newDate) {
     if (!newDate) return;
     scannerState.expiryDate = newDate;
     const days = Math.ceil((new Date(newDate) - new Date()) / (1000 * 60 * 60 * 24));
     scannerState.daysLeft = Math.max(0, days);
-    const shelfLifeEl = document.getElementById('scan-shelf-life');
-    if (shelfLifeEl) shelfLifeEl.textContent = `${scannerState.daysLeft}d life`;
+  };
+
+  window.handleQtyDirectInput = function (val) {
+    scannerState.quantity = Math.max(1, Number(val) || 1);
   };
 
   async function initCameraFeed() {
@@ -480,40 +550,76 @@
   window.decrementIntakeCount = function () {
     if (scannerState.quantity > 1) {
       scannerState.quantity--;
-      const countEl = document.getElementById('intake-count');
-      if (countEl) countEl.textContent = scannerState.quantity;
+      const countInput = document.getElementById('intake-count-input');
+      if (countInput) countInput.value = scannerState.quantity;
     }
   };
 
   window.incrementIntakeCount = function () {
     scannerState.quantity++;
-    const countEl = document.getElementById('intake-count');
-    if (countEl) countEl.textContent = scannerState.quantity;
+    const countInput = document.getElementById('intake-count-input');
+    if (countInput) countInput.value = scannerState.quantity;
   };
 
   window.confirmIntake = async function () {
     const btn = document.getElementById('btn-confirm-intake');
     if (!btn) return;
 
+    // Capture all details directly from input elements
+    const nameInput = document.getElementById('scan-input-name');
+    const barcodeInput = document.getElementById('scan-input-barcode');
+    const mrpInput = document.getElementById('scan-input-mrp');
+    const costInput = document.getElementById('scan-input-cost');
+    const catInput = document.getElementById('scan-input-category');
+    const expiryInput = document.getElementById('scan-expiry-input');
+    const countInput = document.getElementById('intake-count-input');
+
+    const name = nameInput ? nameInput.value.trim() : scannerState.name;
+    const barcode = barcodeInput && barcodeInput.value.trim() ? barcodeInput.value.trim() : (scannerState.barcode || '890' + Math.floor(1000000000 + Math.random() * 9000000000));
+    const mrp = mrpInput && mrpInput.value !== '' ? Number(mrpInput.value) : Number(scannerState.mrp || 0);
+    const cost = costInput && costInput.value !== '' ? Number(costInput.value) : Math.round(mrp * 0.8);
+    const category = catInput ? catInput.value : (scannerState.category || 'Daily Staples');
+    const expiryDate = expiryInput && expiryInput.value ? expiryInput.value : scannerState.expiryDate;
+    const quantity = countInput ? Math.max(1, Number(countInput.value) || 1) : scannerState.quantity;
+
+    if (!name) {
+      showToast('Please enter the Item Name', false);
+      if (nameInput) nameInput.focus();
+      return;
+    }
+
+    if (mrp <= 0) {
+      showToast('Please enter a valid Selling Price (MRP)', false);
+      if (mrpInput) mrpInput.focus();
+      return;
+    }
+
+    if (!expiryDate) {
+      showToast('Please select an Expiry Date', false);
+      if (expiryInput) expiryInput.focus();
+      return;
+    }
+
     const originalHTML = btn.innerHTML;
     btn.innerHTML = `<span class="material-symbols-outlined text-[20px] animate-spin">refresh</span><span>Saving Stock...</span>`;
 
     try {
-      // 1. Check if product exists in live database
-      let product = await window.SkitDB.getProductByBarcode(scannerState.barcode);
+      // 1. Check if product exists in live database (or insert / update)
+      let product = await window.SkitDB.getProductByBarcode(barcode);
       if (!product) {
         product = await window.SkitDB.addProduct({
-          barcode: scannerState.barcode,
-          name: scannerState.name,
-          category: scannerState.category,
-          mrp: scannerState.mrp,
-          cost_price: scannerState.cost_price,
-          shelf_life_days: scannerState.daysLeft,
+          barcode,
+          name,
+          category,
+          mrp,
+          cost_price: cost,
+          shelf_life_days: Math.max(1, Math.ceil((new Date(expiryDate) - new Date()) / (1000 * 60 * 60 * 24))),
           unit: 'units'
         });
       }
 
       // 2. Add batch under merchant store ID
+      const batchCode = scannerState.batchCode || ('BT-' + Math.floor(1000 + Math.random() * 9000));
       await window.SkitDB.addBatch({
         product_id: product.id,
         product_name: product.name,
@@ -522,19 +628,23 @@
         mrp: product.mrp,
         cost_price: product.cost_price,
         unit: product.unit || 'units',
-        batch_code: scannerState.batchCode,
-        expiry_date: scannerState.expiryDate,
-        quantity_on_hand: scannerState.quantity
+        batch_code: batchCode,
+        expiry_date: expiryDate,
+        quantity_on_hand: quantity
       });
 
-      btn.innerHTML = `<span class="material-symbols-outlined text-[20px]">check_circle</span><span>Batch Added!</span>`;
+      btn.innerHTML = `<span class="material-symbols-outlined text-[20px]">check_circle</span><span>Item Saved!</span>`;
       btn.classList.remove('bg-primary');
       btn.classList.add('bg-primary-container');
 
-      showToast(`Added ${scannerState.quantity} units of ${scannerState.name} to shelf!`);
+      showToast(`Added ${quantity} units of ${name} to stock!`);
 
-      // Rotate batch code for next intake
+      // Prepare fresh batch code for next item
       scannerState.batchCode = 'BT-' + Math.floor(1000 + Math.random() * 9000);
+      scannerState.name = '';
+      scannerState.barcode = '';
+      scannerState.mrp = '';
+      scannerState.cost_price = '';
 
       setTimeout(() => {
         btn.innerHTML = originalHTML;
@@ -545,7 +655,7 @@
     } catch (e) {
       console.error('[confirmIntake error]', e);
       btn.innerHTML = originalHTML;
-      showToast('Error adding batch: ' + (e.message || 'Check database'), false);
+      showToast('Error saving item: ' + (e.message || 'Check database'), false);
     }
   };
 

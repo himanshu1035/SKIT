@@ -1,7 +1,7 @@
 -- ==============================================================================
 -- SKIT: Smart Kariyana Inventory Technology
--- Complete Production Database Schema for Supabase PostgreSQL
--- File: main.SQL
+-- Production Relational Database Schema for Supabase PostgreSQL
+-- File: main.SQL (100% Clean Schema - Zero Mock Data)
 -- ==============================================================================
 
 -- 1. Clean Reset of existing tables (prevents conflict or missing column errors)
@@ -17,7 +17,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- ------------------------------------------------------------------------------
--- 3. Merchants & Store Accounts
+-- 3. Merchants & Store Accounts Table
 -- ------------------------------------------------------------------------------
 CREATE TABLE merchants (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -34,7 +34,7 @@ CREATE TABLE merchants (
 CREATE INDEX idx_merchants_phone ON merchants(phone);
 
 -- ------------------------------------------------------------------------------
--- 4. Products Table (Scoped to Merchant)
+-- 4. Products Table (Scoped to Merchant Store ID)
 -- ------------------------------------------------------------------------------
 CREATE TABLE products (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -121,7 +121,7 @@ CREATE INDEX idx_markdown_merchant ON markdown_suggestions(merchant_id);
 CREATE INDEX idx_markdown_batch ON markdown_suggestions(batch_id);
 
 -- ------------------------------------------------------------------------------
--- 9. Row Level Security (RLS) Permissive Policies for Web App Access
+-- 9. Row Level Security (RLS) Permissive Policies for Web Application
 -- ------------------------------------------------------------------------------
 ALTER TABLE merchants ENABLE ROW LEVEL SECURITY;
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
@@ -150,47 +150,3 @@ BEGIN
     DROP POLICY IF EXISTS "Allow public read/write markdown_suggestions" ON markdown_suggestions;
     CREATE POLICY "Allow public read/write markdown_suggestions" ON markdown_suggestions FOR ALL USING (true) WITH CHECK (true);
 END $$;
-
--- ------------------------------------------------------------------------------
--- 10. Optional Initial Seed Merchant Account (Mobile: 9876543210, PIN: 1111)
--- ------------------------------------------------------------------------------
-INSERT INTO merchants (id, phone, pin_hash, store_name, location, otp_verified, currency)
-VALUES (
-    'a0000000-0000-0000-0000-000000000001',
-    '9876543210',
-    '1111',
-    'Kirana Super Store',
-    'Sector 4, Main Market',
-    true,
-    'INR'
-)
-ON CONFLICT (phone) DO UPDATE 
-SET pin_hash = EXCLUDED.pin_hash,
-    store_name = EXCLUDED.store_name,
-    otp_verified = true;
-
--- Sample Product & Batch for testing
-INSERT INTO products (id, merchant_id, barcode, name, category, mrp, cost_price, shelf_life_days, unit)
-VALUES (
-    'b0000000-0000-0000-0000-000000000001',
-    'a0000000-0000-0000-0000-000000000001',
-    '8901260012345',
-    'Packaged Grocery Item',
-    'Daily Staples',
-    50.00,
-    40.00,
-    30,
-    'units'
-)
-ON CONFLICT DO NOTHING;
-
-INSERT INTO batches (id, merchant_id, product_id, batch_code, expiry_date, quantity_on_hand)
-VALUES (
-    'c0000000-0000-0000-0000-000000000001',
-    'a0000000-0000-0000-0000-000000000001',
-    'b0000000-0000-0000-0000-000000000001',
-    'BT-2401',
-    CURRENT_DATE + INTERVAL '25 days',
-    12
-)
-ON CONFLICT DO NOTHING;

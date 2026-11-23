@@ -377,52 +377,88 @@
 
       <!-- Comprehensive Intake Card -->
       <div class="relative -mt-4 z-20 w-full bg-surface-container-lowest rounded-t-2xl p-4 shadow-lg pb-24 border-t border-outline-variant/30 flex flex-col gap-3">
-        <!-- Item Info -->
-        <div class="flex items-start justify-between">
-          <div class="min-w-0 flex-1">
-            <div class="flex items-center gap-1.5">
-              <span id="scan-product-category" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-surface-container text-on-surface-variant">Daily Staples</span>
-              <span id="scan-batch-code" class="text-[10px] font-mono text-outline">#BT-1234</span>
-            </div>
-            <h3 id="scan-product-name" class="font-bold text-base text-on-surface truncate mt-0.5">Packaged Grocery Item</h3>
-            <p id="scan-product-barcode" class="text-xs text-on-surface-variant font-mono">8901260012345</p>
-          </div>
-          <div class="text-right">
-            <span id="scan-product-mrp" class="text-lg font-extrabold text-primary">₹50</span>
-            <p id="scan-product-cost" class="text-[11px] text-outline">Cost: ₹40</p>
-          </div>
-        </div>
-
-        <!-- Expiry Date Selector -->
-        <div class="flex items-center justify-between bg-surface-container-low rounded-xl px-3 py-2">
+        <!-- Header & Reset -->
+        <div class="flex items-center justify-between">
           <div class="flex items-center gap-1.5">
-            <span class="material-symbols-outlined text-[18px] text-on-surface-variant">calendar_today</span>
-            <div>
-              <span class="text-xs font-semibold text-on-surface block">Expiry Date</span>
-              <span id="scan-shelf-life" class="text-[10px] text-on-surface-variant font-medium">30 Days</span>
-            </div>
+            <span class="material-symbols-outlined text-primary text-[20px]">add_shopping_cart</span>
+            <span class="font-bold text-sm text-on-surface">Product Details</span>
           </div>
-          <input id="scan-expiry-input" type="date" onchange="window.handleScannerExpiryChange(this.value)" class="bg-surface-container-lowest text-xs font-semibold px-2.5 py-1 rounded-lg border border-outline-variant/30 text-on-surface focus:outline-none" />
+          <button onclick="window.resetScannerForm()" type="button" class="text-xs text-primary font-semibold flex items-center gap-0.5 hover:underline">
+            <span class="material-symbols-outlined text-[15px]">refresh</span>
+            <span>New Item</span>
+          </button>
         </div>
 
-        <!-- Quantity Stepper -->
+        <!-- Item Name -->
+        <div class="flex flex-col gap-0.5">
+          <label class="text-[10px] font-semibold text-on-surface-variant">Item Name</label>
+          <input id="scan-input-name" placeholder="e.g. Tata Salt 1kg, Fortune Oil 1L" class="h-10 w-full bg-surface-container-low rounded-xl px-3 text-sm font-semibold text-on-surface focus:outline-none border border-outline-variant/20 focus:border-primary" />
+        </div>
+
+        <!-- Barcode with Auto-Gen -->
+        <div class="flex flex-col gap-0.5">
+          <label class="text-[10px] font-semibold text-on-surface-variant">Barcode</label>
+          <div class="flex items-center gap-2">
+            <input id="scan-input-barcode" placeholder="Scan or enter barcode (e.g. 890123...)" oninput="window.handleBarcodeLookup(this.value)" class="flex-1 h-10 bg-surface-container-low rounded-xl px-3 text-xs font-mono text-on-surface focus:outline-none border border-outline-variant/20 focus:border-primary" />
+            <button onclick="window.generateRandomBarcode()" type="button" title="Generate barcode" class="h-10 px-3 bg-surface-container rounded-xl text-xs font-semibold flex items-center gap-1 active:scale-95 transition">
+              <span class="material-symbols-outlined text-[16px]">qr_code</span>
+              <span>Gen</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Price (MRP) & Cost -->
+        <div class="grid grid-cols-2 gap-2">
+          <div class="flex flex-col gap-0.5">
+            <label class="text-[10px] font-semibold text-on-surface-variant">Selling Price (₹)</label>
+            <input id="scan-input-mrp" type="number" placeholder="50" class="h-10 w-full bg-surface-container-low rounded-xl px-3 text-sm font-bold text-primary focus:outline-none border border-outline-variant/20 focus:border-primary" />
+          </div>
+          <div class="flex flex-col gap-0.5">
+            <label class="text-[10px] font-semibold text-on-surface-variant">Cost Price (₹)</label>
+            <input id="scan-input-cost" type="number" placeholder="40" class="h-10 w-full bg-surface-container-low rounded-xl px-3 text-sm font-semibold text-on-surface-variant focus:outline-none border border-outline-variant/20" />
+          </div>
+        </div>
+
+        <!-- Category & Expiry Date -->
+        <div class="grid grid-cols-2 gap-2">
+          <div class="flex flex-col gap-0.5">
+            <label class="text-[10px] font-semibold text-on-surface-variant">Category</label>
+            <select id="scan-input-category" class="h-10 w-full bg-surface-container-low rounded-xl px-2.5 text-xs font-medium text-on-surface focus:outline-none border border-outline-variant/20">
+              <option value="Daily Staples">Daily Staples</option>
+              <option value="Dairy">Dairy</option>
+              <option value="Bakery">Bakery</option>
+              <option value="Snacks & Beverages">Snacks & Beverages</option>
+              <option value="Personal Care">Personal Care</option>
+              <option value="General Grocery">General</option>
+            </select>
+          </div>
+          <div class="flex flex-col gap-0.5">
+            <label class="text-[10px] font-semibold text-on-surface-variant">Expiry Date</label>
+            <input id="scan-expiry-input" type="date" class="h-10 w-full bg-surface-container-low rounded-xl px-2 text-xs font-semibold text-on-surface focus:outline-none border border-outline-variant/20" />
+          </div>
+        </div>
+
+        <!-- Total Stock Stepper -->
         <div class="flex items-center justify-between bg-surface-container-low rounded-xl px-3 py-2">
-          <span class="text-xs font-semibold text-on-surface">Intake Quantity</span>
-          <div class="flex items-center gap-3">
-            <button onclick="window.decrementIntakeCount()" class="w-8 h-8 rounded-lg bg-surface-container-lowest text-on-surface shadow-sm font-bold flex items-center justify-center active:scale-90 transition">
+          <div class="flex flex-col">
+            <span class="text-xs font-semibold text-on-surface">Total Stock Units</span>
+            <span id="scan-batch-code" class="text-[10px] font-mono text-outline">Batch: #BT-Auto</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="window.decrementIntakeCount()" type="button" class="w-8 h-8 rounded-lg bg-surface-container-lowest text-on-surface shadow-sm font-bold flex items-center justify-center active:scale-90 transition">
               <span class="material-symbols-outlined text-[16px]">remove</span>
             </button>
-            <span id="intake-count" class="font-bold text-base w-6 text-center">1</span>
-            <button onclick="window.incrementIntakeCount()" class="w-8 h-8 rounded-lg bg-primary text-on-primary shadow-sm font-bold flex items-center justify-center active:scale-90 transition">
+            <input id="intake-count-input" type="number" min="1" value="1" oninput="window.handleQtyDirectInput(this.value)" class="w-14 text-center h-8 bg-surface-container-lowest font-bold text-sm rounded-lg border border-outline-variant/30 focus:outline-none" />
+            <button onclick="window.incrementIntakeCount()" type="button" class="w-8 h-8 rounded-lg bg-primary text-on-primary shadow-sm font-bold flex items-center justify-center active:scale-90 transition">
               <span class="material-symbols-outlined text-[16px]">add</span>
             </button>
           </div>
         </div>
 
-        <!-- Single Primary Button -->
+        <!-- Add to Stock Button -->
         <button id="btn-confirm-intake" onclick="window.confirmIntake()" type="button" class="w-full h-12 rounded-xl bg-primary text-on-primary font-semibold flex items-center justify-center gap-1.5 shadow-md active:scale-98 transition">
           <span class="material-symbols-outlined text-[20px]">add_box</span>
-          <span>Add to Stock</span>
+          <span>Add Item to Inventory</span>
         </button>
       </div>
     </main>
