@@ -1,1094 +1,1356 @@
-/**
- * SKIT: Smart Kariyana Inventory Technology
- * Production Application Controller & Route Orchestrator
- */
+// Supabase database object
+var db = null;
 
-(function (window, document) {
-  'use strict';
+// Register PWA Service Worker
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/sw.js").catch(function (err) {
+    console.log("SW error:", err);
+  });
+}
 
-  // State
-  let currentRoute = 'welcome';
-  let activeSoldModal = null;
-  let cameraStream = null;
-  let deferredInstallPrompt = null;
+// Check if current page is inside /pages/ folder
+function isInPagesFolder() {
+  return window.location.pathname.indexOf("/pages/") !== -1;
+}
 
-  // Scanner Live Form State
-  let scannerState = {
-    barcode: '',
-    name: '',
-    category: 'Daily Staples',
-    mrp: '',
-    cost_price: '',
-    expiryDate: getFutureDate(30),
-    daysLeft: 30,
-    batchCode: 'BT-' + Math.floor(1000 + Math.random() * 9000),
-    quantity: 1
+// Read SUPABASE_URL and SUPABASE_ANON_KEY from .env.local
+async function connectDatabase() {
+  if (db !== null) {
+    return db;
+  }
+
+  try {
+    var envPath = isInPagesFolder() ? "../.env.local" : ".env.local";
+    var response = await fetch(envPath);
+    var text = await response.text();
+    var lines = text.split("\n");
+
+    var url = "";
+    var key = "";
+
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i].trim();
+      if (line.indexOf("SUPABASE_URL=") === 0) {
+        url = line.replace("SUPABASE_URL=", "").trim();
+      }
+      if (line.indexOf("SUPABASE_ANON_KEY=") === 0) {
+        key = line.replace("SUPABASE_ANON_KEY=", "").trim();
+      }
+    }
+
+    if (!url || !key || url.indexOf("your-project-id") !== -1) {
+      return null;
+    }
+
+    db = window.supabase.createClient(url, key);
+    return db;
+  } catch (err) {
+    console.log("Error reading .env.local:", err);
+    return null;
+  }
+}
+
+// Pre-connect right away so login/signup is faster
+connectDatabase();
+
+// Cookie helpers (used instead of localStorage)
+function setLoggedInCookie(mobile) {
+  document.cookie = "loggedInMobile=" + mobile + "; path=/; max-age=604800";
+}
+
+function getLoggedInCookie() {
+  var cookies = document.cookie.split(";");
+  for (var i = 0; i < cookies.length; i++) {
+    var parts = cookies[i].trim().split("=");
+    if (parts[0] === "loggedInMobile") {
+      return parts[1];
+    }
+  }
+  return "";
+}
+
+function clearLoggedInCookie() {
+  document.cookie = "loggedInMobile=; path=/; max-age=0";
+}
+
+// Save login entry in Supabase login_history table
+async function saveLoginHistory(client, mobile, shopName) {
+  var res = await client
+    .from("login_history")
+    .insert([
+      {
+        mobile: mobile,
+        shop_name: shopName,
+        is_logged_in: true
+      }
+    ]);
+
+  if (res.error) {
+    console.log("login_history error:", res.error.message);
+  }
+}
+
+// Helper to show loading state on submit button
+function setButtonLoading(formId, isLoading, loadingText, normalText) {
+  var form = document.getElementById(formId);
+  if (!form) return;
+  var btn = form.querySelector("button[type='submit']");
+  if (!btn) return;
+
+  btn.disabled = isLoading;
+  btn.innerText = isLoading ? loadingText : normalText;
+}
+
+// Show or hide hamburger side menu
+function toggleMenu() {
+  var overlay = document.getElementById("side-menu-overlay");
+  if (overlay) {
+    overlay.classList.toggle("open");
+  }
+}
+
+// Show or hide password
+function togglePassword(inputId, btn) {
+  var input = document.getElementById(inputId);
+  if (input.type === "password") {
+    input.type = "text";
+    btn.innerText = "Hide";
+  } else {
+    input.type = "password";
+    btn.innerText = "Show";
+  }
+}
+
+// Clear all error messages
+function clearErrors() {
+  var errors = document.getElementsByClassName("error");
+  for (var i = 0; i < errors.length; i++) {
+    errors[i].innerText = "";
+  }
+
+  var loginMainError = document.getElementById("login-main-error");
+  if (loginMainError) {
+    loginMainError.innerText = "";
+  }
+
+  var signupMainError = document.getElementById("signup-main-error");
+  if (signupMainError) {
+    signupMainError.innerText = "";
+  }
+
+  var profileMainError = document.getElementById("profile-main-error");
+  if (profileMainError) {
+    profileMainError.innerText = "";
+  }
+
+  var profileSuccess = document.getElementById("profile-success");
+  if (profileSuccess) {
+    profileSuccess.innerText = "";
+  }
+
+  var addMainError = document.getElementById("add-main-error");
+  if (addMainError) {
+    addMainError.innerText = "";
+  }
+
+  var addSuccess = document.getElementById("add-success");
+  if (addSuccess) {
+    addSuccess.innerText = "";
+  }
+}
+
+// Allow only digits in mobile input
+function allowOnlyNumbers(inputId) {
+  var input = document.getElementById(inputId);
+  if (input) {
+    input.addEventListener("input", function () {
+      input.value = input.value.replace(/[^0-9]/g, "");
+    });
+  }
+}
+
+allowOnlyNumbers("login-mobile");
+allowOnlyNumbers("signup-mobile");
+allowOnlyNumbers("profile-mobile");
+
+// Login form submit
+async function handleLogin(event) {
+  event.preventDefault();
+  clearErrors();
+
+  var mobile = document.getElementById("login-mobile").value.trim();
+  var password = document.getElementById("login-password").value;
+  var hasError = false;
+
+  if (mobile.length !== 10) {
+    document.getElementById("login-mobile-error").innerText = "Enter 10-digit mobile number";
+    hasError = true;
+  }
+
+  if (password === "") {
+    document.getElementById("login-password-error").innerText = "Enter password";
+    hasError = true;
+  }
+
+  if (hasError) {
+    return;
+  }
+
+  setButtonLoading("login-form", true, "Logging in...", "Login");
+
+  var client = await connectDatabase();
+  if (client === null) {
+    setButtonLoading("login-form", false, "Logging in...", "Login");
+    document.getElementById("login-main-error").innerText = "Set SUPABASE_URL and SUPABASE_ANON_KEY in .env.local";
+    return;
+  }
+
+  var result = await client
+    .from("user_details")
+    .select("*")
+    .eq("mobile", mobile)
+    .eq("password", password)
+    .maybeSingle();
+
+  if (result.error) {
+    setButtonLoading("login-form", false, "Logging in...", "Login");
+    document.getElementById("login-main-error").innerText = "Database error: " + result.error.message;
+    return;
+  }
+
+  if (!result.data) {
+    setButtonLoading("login-form", false, "Logging in...", "Login");
+    document.getElementById("login-main-error").innerText = "Wrong mobile number or password";
+    return;
+  }
+
+  // Save cookie and login history in Supabase
+  setLoggedInCookie(result.data.mobile);
+  await saveLoginHistory(client, result.data.mobile, result.data.shop_name);
+
+  window.location.href = "home.html";
+}
+
+// Sign up form submit
+async function handleSignup(event) {
+  event.preventDefault();
+  clearErrors();
+
+  var mobile = document.getElementById("signup-mobile").value.trim();
+  var shopName = document.getElementById("signup-shop").value.trim();
+  var password = document.getElementById("signup-password").value;
+  var confirmPassword = document.getElementById("signup-confirm").value;
+  var hasError = false;
+
+  if (mobile.length !== 10) {
+    document.getElementById("signup-mobile-error").innerText = "Enter 10-digit mobile number";
+    hasError = true;
+  }
+
+  if (shopName.length < 2) {
+    document.getElementById("signup-shop-error").innerText = "Enter shop name";
+    hasError = true;
+  }
+
+  if (password.length < 6) {
+    document.getElementById("signup-password-error").innerText = "Minimum 6 characters required";
+    hasError = true;
+  }
+
+  if (confirmPassword !== password || confirmPassword === "") {
+    document.getElementById("signup-confirm-error").innerText = "Passwords do not match";
+    hasError = true;
+  }
+
+  if (hasError) {
+    return;
+  }
+
+  setButtonLoading("signup-form", true, "Signing up...", "Sign Up");
+
+  var client = await connectDatabase();
+  if (client === null) {
+    setButtonLoading("signup-form", false, "Signing up...", "Sign Up");
+    document.getElementById("signup-main-error").innerText = "Set SUPABASE_URL and SUPABASE_ANON_KEY in .env.local";
+    return;
+  }
+
+  var check = await client
+    .from("user_details")
+    .select("mobile")
+    .eq("mobile", mobile)
+    .maybeSingle();
+
+  if (check.error) {
+    setButtonLoading("signup-form", false, "Signing up...", "Sign Up");
+    document.getElementById("signup-main-error").innerText = "Database error: " + check.error.message;
+    return;
+  }
+
+  if (check.data) {
+    setButtonLoading("signup-form", false, "Signing up...", "Sign Up");
+    document.getElementById("signup-main-error").innerText = "Mobile number already registered";
+    return;
+  }
+
+  var insertResult = await client
+    .from("user_details")
+    .insert([
+      {
+        mobile: mobile,
+        shop_name: shopName,
+        password: password
+      }
+    ]);
+
+  if (insertResult.error) {
+    setButtonLoading("signup-form", false, "Signing up...", "Sign Up");
+    document.getElementById("signup-main-error").innerText = "Database error: " + insertResult.error.message;
+    return;
+  }
+
+  // Save cookie and login history in Supabase
+  setLoggedInCookie(mobile);
+  await saveLoginHistory(client, mobile, shopName);
+
+  window.location.href = "home.html";
+}
+
+// Logout button click (only way to log out)
+async function handleLogout() {
+  var logoutBtn = document.getElementById("logout-btn");
+  if (logoutBtn) {
+    logoutBtn.disabled = true;
+    logoutBtn.innerText = "Logging out...";
+  }
+
+  var mobile = getLoggedInCookie();
+  var client = await connectDatabase();
+
+  if (client !== null && mobile !== "") {
+    await client
+      .from("login_history")
+      .update({
+        is_logged_in: false,
+        logout_time: new Date().toISOString()
+      })
+      .eq("mobile", mobile)
+      .eq("is_logged_in", true);
+  }
+
+  clearLoggedInCookie();
+  window.location.href = "login.html";
+}
+
+var selectedProfileIcon = "";
+
+function previewProfileIcon(event) {
+  var file = event.target.files[0];
+  var preview = document.getElementById("profile-icon-preview");
+  if (!file || !preview) return;
+
+  compressImageFile(file, function (compressedData) {
+    selectedProfileIcon = compressedData;
+    preview.src = compressedData;
+    preview.style.display = "block";
+  });
+}
+
+function renderTopBarProfile(shopName, profileIcon) {
+  var topShopName = document.getElementById("top-shop-name");
+  if (topShopName) {
+    topShopName.innerText = shopName;
+  }
+
+  var profileBtn = document.getElementById("profile-btn");
+  if (profileBtn) {
+    if (profileIcon && profileIcon.indexOf("data:image") === 0) {
+      profileBtn.innerHTML = "<img src='" + profileIcon + "' alt='Profile' />";
+    } else {
+      profileBtn.innerText = shopName.charAt(0).toUpperCase();
+    }
+  }
+}
+
+// Load shop name and profile icon for top bar and profile form
+async function loadUserInfo(client, mobile) {
+  var res = await client
+    .from("user_details")
+    .select("mobile, shop_name, profile_icon")
+    .eq("mobile", mobile)
+    .maybeSingle();
+
+  if (!res.data) {
+    return;
+  }
+
+  var shopName = res.data.shop_name;
+  selectedProfileIcon = res.data.profile_icon || "";
+  renderTopBarProfile(shopName, selectedProfileIcon);
+
+  var profileShopInput = document.getElementById("profile-shop");
+  var profileMobileInput = document.getElementById("profile-mobile");
+  if (profileShopInput && profileMobileInput) {
+    profileShopInput.value = shopName;
+    profileMobileInput.value = res.data.mobile;
+
+    var iconPreview = document.getElementById("profile-icon-preview");
+    if (iconPreview && selectedProfileIcon && selectedProfileIcon.indexOf("data:image") === 0) {
+      iconPreview.src = selectedProfileIcon;
+      iconPreview.style.display = "block";
+    }
+  }
+}
+
+// Save updated profile details
+async function handleProfileSave(event) {
+  event.preventDefault();
+  clearErrors();
+
+  var currentMobile = getLoggedInCookie();
+  var newShop = document.getElementById("profile-shop").value.trim();
+  var newMobile = document.getElementById("profile-mobile").value.trim();
+  var newPassword = document.getElementById("profile-password").value;
+  var hasError = false;
+
+  if (newShop.length < 2) {
+    document.getElementById("profile-shop-error").innerText = "Enter shop name";
+    hasError = true;
+  }
+
+  if (newMobile.length !== 10) {
+    document.getElementById("profile-mobile-error").innerText = "Enter 10-digit mobile number";
+    hasError = true;
+  }
+
+  if (newPassword !== "" && newPassword.length < 6) {
+    document.getElementById("profile-password-error").innerText = "Minimum 6 characters required";
+    hasError = true;
+  }
+
+  if (hasError) {
+    return;
+  }
+
+  setButtonLoading("profile-form", true, "Saving...", "Save Changes");
+
+  var client = await connectDatabase();
+  if (client === null) {
+    setButtonLoading("profile-form", false, "Saving...", "Save Changes");
+    document.getElementById("profile-main-error").innerText = "Database not connected";
+    return;
+  }
+
+  // If mobile changed, check if new mobile is already taken
+  if (newMobile !== currentMobile) {
+    var check = await client
+      .from("user_details")
+      .select("mobile")
+      .eq("mobile", newMobile)
+      .maybeSingle();
+
+    if (check.data) {
+      setButtonLoading("profile-form", false, "Saving...", "Save Changes");
+      document.getElementById("profile-main-error").innerText = "Mobile number already registered";
+      return;
+    }
+  }
+
+  var updates = {
+    shop_name: newShop,
+    mobile: newMobile,
+    profile_icon: selectedProfileIcon
   };
 
-  function getFutureDate(days) {
-    const d = new Date();
-    d.setDate(d.getDate() + days);
-    return d.toISOString().split('T')[0];
+  if (newPassword !== "") {
+    updates.password = newPassword;
   }
 
-  function formatDateHuman(isoDate) {
-    if (!isoDate) return 'No Date';
-    const d = new Date(isoDate);
-    return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  var updateRes = await client
+    .from("user_details")
+    .update(updates)
+    .eq("mobile", currentMobile);
+
+  if (updateRes.error) {
+    setButtonLoading("profile-form", false, "Saving...", "Save Changes");
+    document.getElementById("profile-main-error").innerText = "Database error: " + updateRes.error.message;
+    return;
   }
 
-  // -------------------------------------------------------------
-  // Toast Notification System
-  // -------------------------------------------------------------
-  function showToast(message, isSuccess = true, icon = null) {
-    const toast = document.getElementById('app-toast');
-    if (!toast) return;
+  // Update active login_history row, product_batches, and cookie if mobile or shop name changed
+  await client
+    .from("login_history")
+    .update({
+      mobile: newMobile,
+      shop_name: newShop
+    })
+    .eq("mobile", currentMobile)
+    .eq("is_logged_in", true);
 
-    const msgEl = document.getElementById('app-toast-msg');
-    const iconEl = document.getElementById('app-toast-icon');
+  if (newMobile !== currentMobile) {
+    await client
+      .from("product_batches")
+      .update({ shop_mobile: newMobile })
+      .eq("shop_mobile", currentMobile);
 
-    if (msgEl) msgEl.textContent = message;
-    if (iconEl) {
-      iconEl.textContent = icon || (isSuccess ? 'check_circle' : 'info');
-      iconEl.className = isSuccess
-        ? 'material-symbols-outlined text-primary-fixed text-[22px]'
-        : 'material-symbols-outlined text-tertiary-container text-[22px]';
-    }
-
-    toast.classList.remove('opacity-0', '-translate-y-28', 'pointer-events-none');
-    toast.classList.add('opacity-100', 'translate-y-0');
-
-    if (window._toastTimer) clearTimeout(window._toastTimer);
-    window._toastTimer = setTimeout(() => {
-      toast.classList.add('opacity-0', '-translate-y-28', 'pointer-events-none');
-      toast.classList.remove('opacity-100', 'translate-y-0');
-    }, 3000);
+    await client
+      .from("product_history")
+      .update({ shop_mobile: newMobile })
+      .eq("shop_mobile", currentMobile);
   }
-  window.showToast = showToast;
 
-  // -------------------------------------------------------------
-  // Client Router
-  // -------------------------------------------------------------
-  const routes = ['welcome', 'login', 'signup', 'dashboard', 'scan', 'clearance', 'inventory', 'settings'];
+  setLoggedInCookie(newMobile);
+  renderTopBarProfile(newShop, selectedProfileIcon);
+  setButtonLoading("profile-form", false, "Saving...", "Save Changes");
+  document.getElementById("profile-password").value = "";
+  document.getElementById("profile-success").innerText = "Profile updated!";
+}
 
-  function navigateTo(route) {
-    const clean = route.replace(/^#\/?/, '').toLowerCase() || 'welcome';
-    window.location.hash = '#' + clean;
-  }
-  window.navigateTo = navigateTo;
+// Compress an uploaded image file (supports .heic, .jpg, .png, etc.)
+async function compressImageFile(file, callback) {
+  var imageBlob = file;
+  var fileName = (file.name || "").toLowerCase();
+  var isHeic =
+    fileName.endsWith(".heic") ||
+    fileName.endsWith(".heif") ||
+    file.type === "image/heic" ||
+    file.type === "image/heif";
 
-  async function handleRoute() {
-    const hash = window.location.hash.replace(/^#\/?/, '').toLowerCase();
-    const route = routes.includes(hash) ? hash : 'welcome';
-    currentRoute = route;
-
-    // Check Authentication Guard
-    const merchant = window.SkitDB.getMerchant();
-    const isAuthRoute = ['welcome', 'login', 'signup'].includes(route);
-
-    if (!merchant && !isAuthRoute) {
-      navigateTo('welcome');
-      return;
-    }
-    if (merchant && isAuthRoute) {
-      navigateTo('dashboard');
-      return;
-    }
-
-    // Stop camera feed if navigating away from scanner
-    if (route !== 'scan' && cameraStream) {
-      cameraStream.getTracks().forEach((track) => track.stop());
-      cameraStream = null;
-    }
-
-    // Toggle View DOM Elements
-    document.querySelectorAll('.app-view').forEach((el) => {
-      if (el.dataset.route === route) {
-        el.classList.remove('hidden');
-      } else {
-        el.classList.add('hidden');
+  if (isHeic && window.heic2any) {
+    try {
+      imageBlob = await window.heic2any({
+        blob: file,
+        toType: "image/jpeg",
+        quality: 0.7
+      });
+      if (Array.isArray(imageBlob)) {
+        imageBlob = imageBlob[0];
       }
-    });
+    } catch (err) {
+      console.log("HEIC convert error:", err);
+    }
+  }
 
-    // Toggle Bottom Navigation Visibility
-    const nav = document.getElementById('app-bottom-nav');
-    if (nav) {
-      if (isAuthRoute) {
-        nav.classList.add('hidden');
-      } else {
-        nav.classList.remove('hidden');
-        updateNavState(route);
+  var reader = new FileReader();
+  reader.onload = function (e) {
+    var img = new Image();
+    img.onload = function () {
+      var maxSize = 240;
+      var width = img.width;
+      var height = img.height;
+
+      if (width > height && width > maxSize) {
+        height = Math.round((height * maxSize) / width);
+        width = maxSize;
+      } else if (height > maxSize) {
+        width = Math.round((width * maxSize) / height);
+        height = maxSize;
       }
-    }
 
-    // Render screen
-    if (route === 'dashboard') {
-      await renderDashboard();
-    } else if (route === 'scan') {
-      await renderScanner();
-    } else if (route === 'clearance') {
-      await renderClearance();
-    } else if (route === 'inventory') {
-      await renderInventory();
-    } else if (route === 'settings') {
-      await renderSettings();
-    }
+      var canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
 
-    window.scrollTo(0, 0);
-  }
-
-  function updateNavState(route) {
-    document.querySelectorAll('#app-bottom-nav [data-path]').forEach((link) => {
-      const path = link.getAttribute('data-path');
-      const iconWrap = link.querySelector('div');
-      const label = link.querySelector('span:last-child');
-      const icon = link.querySelector('.material-symbols-outlined');
-
-      if (path === route || (path === 'dashboard' && route === '')) {
-        link.classList.add('text-primary');
-        link.classList.remove('text-on-surface-variant');
-        if (iconWrap && path !== 'scan') iconWrap.classList.add('bg-primary-container/25');
-        if (icon && path !== 'scan') icon.classList.add('text-primary');
-        if (label && path !== 'scan') label.classList.add('font-semibold', 'text-primary');
-      } else {
-        link.classList.remove('text-primary');
-        link.classList.add('text-on-surface-variant');
-        if (iconWrap && path !== 'scan') iconWrap.classList.remove('bg-primary-container/25');
-        if (icon && path !== 'scan') icon.classList.remove('text-primary');
-        if (label && path !== 'scan') label.classList.remove('font-semibold', 'text-primary');
-      }
-    });
-  }
-
-  // -------------------------------------------------------------
-  // Screen: Store Dashboard & Real-Time FEFO Queue
-  // -------------------------------------------------------------
-  async function renderDashboard() {
-    const merchant = window.SkitDB.getMerchant();
-    if (!merchant) return;
-
-    // Display Authenticated Store Context
-    const storeTitle = document.getElementById('dash-store-name');
-    const storeLoc = document.getElementById('dash-store-loc');
-    if (storeTitle) storeTitle.textContent = merchant.store_name || 'My Kirana Store';
-    if (storeLoc) storeLoc.textContent = merchant.location || 'Local Market';
-
-    // Show loading state for metrics
-    const metrics = await window.SkitDB.getMetrics();
-    const batches = await window.SkitDB.getBatches();
-
-    // Bento Tickers
-    const activeSkusEl = document.getElementById('stat-active-skus');
-    const fefoCountEl = document.getElementById('stat-fefo-count');
-    const moneySavedEl = document.getElementById('stat-money-saved');
-    const actionCountEl = document.getElementById('action-items-count');
-
-    if (activeSkusEl) activeSkusEl.textContent = metrics.activeSkus;
-    if (fefoCountEl) fefoCountEl.textContent = metrics.fefoCount;
-    if (moneySavedEl) moneySavedEl.textContent = '₹' + Number(metrics.moneySaved).toLocaleString('en-IN');
-
-    // Filter batches needing priority action (<= 7 days)
-    const priorityQueue = batches.filter((b) => b.days_left <= 7);
-    const sectionTitleEl = document.getElementById('dash-section-title');
-    if (sectionTitleEl) {
-      sectionTitleEl.textContent = priorityQueue.length > 0 ? 'Action Required' : 'Stock Inventory';
-    }
-    if (actionCountEl) {
-      actionCountEl.textContent = priorityQueue.length > 0 
-        ? priorityQueue.length + ' urgent' 
-        : batches.length + ' active items';
-      actionCountEl.className = priorityQueue.length > 0 
-        ? 'text-xs font-semibold text-error' 
-        : 'text-xs font-semibold text-primary';
-    }
-
-    const queueContainer = document.getElementById('dashboard-action-queue');
-    if (!queueContainer) return;
-
-    // Empty State when new store has 0 batches
-    if (batches.length === 0) {
-      queueContainer.innerHTML = `
-        <div class="bg-surface-container-lowest rounded-2xl p-6 text-center shadow-sm flex flex-col items-center">
-          <div class="w-12 h-12 rounded-full bg-primary/10 text-primary mx-auto flex items-center justify-center mb-2">
-            <span class="material-symbols-outlined text-[28px]">inventory_2</span>
-          </div>
-          <h4 class="font-bold text-sm text-on-surface">No Items In Stock</h4>
-          <p class="text-xs text-on-surface-variant mt-1">Tap below to scan and track your first grocery item.</p>
-          <button onclick="location.hash='#scan'" class="mt-3 px-4 py-2 bg-primary text-on-primary rounded-xl text-xs font-semibold flex items-center gap-1 active:scale-95 transition shadow-sm">
-            <span class="material-symbols-outlined text-[16px]">qr_code_scanner</span>
-            Scan Stock Intake
-          </button>
-        </div>
-      `;
-      return;
-    }
-
-    // Reassurance banner when all items have > 7 days freshness
-    let bannerHTML = '';
-    if (priorityQueue.length === 0) {
-      bannerHTML = `
-        <div class="bg-primary/10 border border-primary/20 rounded-xl px-3 py-2 flex items-center justify-between mb-1">
-          <div class="flex items-center gap-2">
-            <span class="material-symbols-outlined text-primary text-[18px]">verified</span>
-            <span class="text-xs font-semibold text-primary">All stock fresh & safe</span>
-          </div>
-          <span class="text-[11px] text-on-surface-variant font-medium">${batches.length} active</span>
-        </div>
-      `;
-    }
-
-    // Render ALL active batches in FEFO order (earliest expiry first)
-    const cardsHTML = batches
-      .map((item) => {
-        const badgeClass =
-          item.days_left <= 1
-            ? 'bg-error text-on-error font-bold'
-            : item.days_left <= 3
-            ? 'bg-tertiary-fixed text-on-tertiary-fixed font-bold'
-            : item.days_left <= 7
-            ? 'bg-secondary-fixed text-on-secondary-fixed font-semibold'
-            : 'bg-primary-fixed/25 text-primary font-semibold';
-
-        const daysLabel =
-          item.days_left === 1
-            ? 'Tomorrow'
-            : item.days_left === 0
-            ? 'Today'
-            : item.days_left <= 7
-            ? `${item.days_left}d left`
-            : `Fresh • ${item.days_left}d`;
-
-        return `
-          <div class="bg-surface-container-lowest rounded-xl p-3 shadow-sm border border-outline-variant/20" id="card-${item.id}">
-            <div class="flex gap-3 items-center">
-              <div class="w-14 h-14 rounded-xl overflow-hidden bg-surface-container-low shrink-0 flex items-center justify-center">
-                <img class="w-full h-full object-cover" src="${item.product_image || 'assets/images/shelf_illustration.png'}" alt="${item.product_name}" onerror="this.src='assets/images/shelf_illustration.png'" />
-              </div>
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center justify-between gap-1">
-                  <h4 class="text-sm font-semibold text-on-surface truncate">${item.product_name}</h4>
-                  <span class="px-2 py-0.5 rounded-full ${badgeClass} text-[10px] whitespace-nowrap">
-                    ${daysLabel}
-                  </span>
-                </div>
-                <div class="flex items-center justify-between mt-1">
-                  <span class="text-xs text-on-surface-variant">
-                    Batch #${item.batch_code} • <strong class="text-on-surface">${item.quantity_on_hand}</strong> ${item.unit}
-                  </span>
-                  <span class="text-xs font-bold text-primary">₹${item.mrp}</span>
-                </div>
-              </div>
-            </div>
-            <div class="mt-2.5">
-              <button 
-                class="w-full h-9 rounded-lg bg-primary text-on-primary text-xs font-semibold flex items-center justify-center gap-1.5 active:scale-98 transition shadow-sm" 
-                onclick="window.openSoldModal('${item.id}', '${item.product_name.replace(/'/g, "\\'")}', ${item.quantity_on_hand}, '${item.unit}', ${item.mrp})">
-                <span class="material-symbols-outlined text-[16px]">sell</span>
-                Record Sale
-              </button>
-            </div>
-          </div>
-        `;
-      })
-      .join('');
-
-    queueContainer.innerHTML = bannerHTML + cardsHTML;
-  }
-
-  // -------------------------------------------------------------
-  // Live Item Deduction Modal
-  // -------------------------------------------------------------
-  window.openSoldModal = function (batchId, name, maxStock, unit, mrp) {
-    activeSoldModal = {
-      batchId,
-      name,
-      maxStock: Number(maxStock),
-      unit: unit || 'units',
-      mrp: Number(mrp) || 0,
-      qty: 1
+      var ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, width, height);
+      callback(canvas.toDataURL("image/jpeg", 0.6));
     };
-
-    const subtitle = document.getElementById('modal-subtitle');
-    const qtyVal = document.getElementById('modal-qty-value');
-    const remainingPreview = document.getElementById('modal-remaining-preview');
-
-    if (subtitle) subtitle.textContent = `${name} • ${maxStock} ${activeSoldModal.unit} available`;
-    if (qtyVal) qtyVal.textContent = '1';
-    if (remainingPreview) remainingPreview.textContent = `Remaining after sale: ${maxStock - 1} ${activeSoldModal.unit}`;
-
-    const backdrop = document.getElementById('sold-modal-backdrop');
-    const sheet = document.getElementById('sold-modal-sheet');
-    if (backdrop && sheet) {
-      backdrop.classList.remove('hidden');
-      setTimeout(() => {
-        sheet.classList.remove('translate-y-full');
-      }, 10);
-    }
+    img.onerror = function () {
+      callback(e.target.result);
+    };
+    img.src = e.target.result;
   };
+  reader.readAsDataURL(imageBlob);
+}
 
-  window.closeSoldModal = function () {
-    const sheet = document.getElementById('sold-modal-sheet');
-    const backdrop = document.getElementById('sold-modal-backdrop');
-    if (sheet && backdrop) {
-      sheet.classList.add('translate-y-full');
-      setTimeout(() => {
-        backdrop.classList.add('hidden');
-        activeSoldModal = null;
-      }, 300);
-    }
-  };
+// Camera stream state
+var activeCameraStream = null;
 
-  window.adjustQty = function (delta) {
-    if (!activeSoldModal) return;
-    const newQty = activeSoldModal.qty + delta;
-    if (newQty >= 1 && newQty <= activeSoldModal.maxStock) {
-      activeSoldModal.qty = newQty;
-      updateSoldModalDisplay();
-    }
-  };
+async function openCamera(mode) {
+  closeCamera(mode);
+  var box = document.getElementById(mode + "-camera-box");
+  var video = document.getElementById(mode + "-camera-video");
+  if (!box || !video || !navigator.mediaDevices) return;
 
-  window.setQty = function (val) {
-    if (!activeSoldModal) return;
-    if (val === 'all') {
-      activeSoldModal.qty = activeSoldModal.maxStock;
-    } else {
-      activeSoldModal.qty = Math.min(Number(val), activeSoldModal.maxStock);
-    }
-    updateSoldModalDisplay();
-  };
+  try {
+    activeCameraStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "environment" },
+      audio: false
+    });
+    video.srcObject = activeCameraStream;
+    box.classList.add("open");
+  } catch (err) {
+    console.log("Camera error:", err);
+  }
+}
 
-  function updateSoldModalDisplay() {
-    if (!activeSoldModal) return;
-    const qtyVal = document.getElementById('modal-qty-value');
-    const remainingPreview = document.getElementById('modal-remaining-preview');
-    if (qtyVal) qtyVal.textContent = activeSoldModal.qty;
-    if (remainingPreview) {
-      const rem = activeSoldModal.maxStock - activeSoldModal.qty;
-      remainingPreview.textContent = `Remaining after sale: ${rem} ${activeSoldModal.unit}`;
-    }
+function capturePhoto(mode) {
+  var video = document.getElementById(mode + "-camera-video");
+  if (!video || !video.videoWidth) return;
+
+  var maxSize = 240;
+  var width = video.videoWidth;
+  var height = video.videoHeight;
+
+  if (width > height && width > maxSize) {
+    height = Math.round((height * maxSize) / width);
+    width = maxSize;
+  } else if (height > maxSize) {
+    width = Math.round((width * maxSize) / height);
+    height = maxSize;
   }
 
-  window.confirmStockDeduction = async function () {
-    if (!activeSoldModal) return;
-    const { batchId, name, qty, unit, mrp } = activeSoldModal;
+  var canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
 
-    try {
-      await window.SkitDB.deductBatchStock(batchId, qty, 'sold', mrp);
-      window.closeSoldModal();
-      showToast(`Logged sale: ${qty} ${unit} of ${name}`);
-      await renderDashboard();
-    } catch (e) {
-      showToast('Error recording sale: ' + e.message, false);
-    }
-  };
+  var ctx = canvas.getContext("2d");
+  ctx.drawImage(video, 0, 0, width, height);
+  var compressed = canvas.toDataURL("image/jpeg", 0.6);
 
-  window.quickApplyDiscount = async function (batchId, pct) {
-    try {
-      await window.SkitDB.deductBatchStock(batchId, 1, 'discounted');
-      showToast(`${pct}% Off sale logged!`);
-      await renderDashboard();
-    } catch (e) {
-      showToast('Error applying discount', false);
-    }
-  };
-
-  window.triggerRTV = async function (batchId, name, qty) {
-    if (confirm(`Return all ${qty} units of ${name} to vendor?`)) {
-      try {
-        await window.SkitDB.deductBatchStock(batchId, qty, 'removed', 0);
-        showToast(`RTV confirmed: Removed ${qty} units from inventory.`);
-        await renderDashboard();
-      } catch (e) {
-        showToast('Error recording RTV', false);
-      }
-    }
-  };
-
-  // -------------------------------------------------------------
-  // Screen: Live Scanner & Intake (M1)
-  // -------------------------------------------------------------
-  async function renderScanner() {
-    if (!scannerState.barcode) {
-      scannerState.barcode = '890' + Math.floor(1000000000 + Math.random() * 9000000000);
-    }
-    if (!scannerState.batchCode) {
-      scannerState.batchCode = 'BT-' + Math.floor(1000 + Math.random() * 9000);
-    }
-    if (!scannerState.expiryDate) {
-      scannerState.expiryDate = getFutureDate(30);
-      scannerState.daysLeft = 30;
-    }
-
-    updateScannerDisplay();
-    initCameraFeed();
+  if (mode === "add") {
+    selectedProductImage = compressed;
+    var addPreview = document.getElementById("item-preview");
+    addPreview.src = compressed;
+    addPreview.style.display = "block";
+  } else {
+    editNewImage = compressed;
+    var editPreview = document.getElementById("edit-item-preview");
+    editPreview.src = compressed;
+    editPreview.style.display = "block";
   }
 
-  function updateScannerDisplay() {
-    const nameInput = document.getElementById('scan-input-name');
-    const barcodeInput = document.getElementById('scan-input-barcode');
-    const mrpInput = document.getElementById('scan-input-mrp');
-    const costInput = document.getElementById('scan-input-cost');
-    const catInput = document.getElementById('scan-input-category');
-    const expiryInput = document.getElementById('scan-expiry-input');
-    const countInput = document.getElementById('intake-count-input');
-    const batchCodeEl = document.getElementById('scan-batch-code');
+  closeCamera(mode);
+}
 
-    if (nameInput && scannerState.name) nameInput.value = scannerState.name;
-    if (barcodeInput && scannerState.barcode) barcodeInput.value = scannerState.barcode;
-    if (mrpInput && scannerState.mrp !== '') mrpInput.value = scannerState.mrp;
-    if (costInput && scannerState.cost_price !== '') costInput.value = scannerState.cost_price;
-    if (catInput && scannerState.category) catInput.value = scannerState.category;
-    if (expiryInput) expiryInput.value = scannerState.expiryDate;
-    if (countInput) countInput.value = scannerState.quantity;
-    if (batchCodeEl) batchCodeEl.textContent = `Batch: #${scannerState.batchCode}`;
+function closeCamera(mode) {
+  if (activeCameraStream) {
+    var tracks = activeCameraStream.getTracks();
+    for (var i = 0; i < tracks.length; i++) {
+      tracks[i].stop();
+    }
+    activeCameraStream = null;
   }
 
-  window.handleBarcodeLookup = async function (barcode) {
-    const clean = String(barcode || '').trim();
-    scannerState.barcode = clean;
-    if (!clean) return;
+  var box = document.getElementById(mode + "-camera-box");
+  if (box) {
+    box.classList.remove("open");
+  }
+}
 
-    try {
-      const existing = await window.SkitDB.getProductByBarcode(clean);
-      if (existing) {
-        scannerState.name = existing.name || scannerState.name;
-        scannerState.mrp = existing.mrp !== undefined ? existing.mrp : scannerState.mrp;
-        scannerState.cost_price = existing.cost_price !== undefined ? existing.cost_price : scannerState.cost_price;
-        scannerState.category = existing.category || scannerState.category;
+// Store compressed product image as base64 text
+var selectedProductImage = "";
 
-        const nameInput = document.getElementById('scan-input-name');
-        const mrpInput = document.getElementById('scan-input-mrp');
-        const costInput = document.getElementById('scan-input-cost');
-        const catInput = document.getElementById('scan-input-category');
+function previewProductImage(event) {
+  var file = event.target.files[0];
+  var preview = document.getElementById("item-preview");
 
-        if (nameInput) nameInput.value = scannerState.name;
-        if (mrpInput) mrpInput.value = scannerState.mrp;
-        if (costInput) costInput.value = scannerState.cost_price;
-        if (catInput) catInput.value = scannerState.category;
-
-        showToast(`Auto-filled: ${existing.name}`);
-      }
-    } catch (e) {
-      console.warn('[Barcode Lookup]', e);
-    }
-  };
-
-  window.generateRandomBarcode = function () {
-    const newBarcode = '890' + Math.floor(1000000000 + Math.random() * 9000000000);
-    scannerState.barcode = newBarcode;
-    const barcodeInput = document.getElementById('scan-input-barcode');
-    if (barcodeInput) barcodeInput.value = newBarcode;
-    showToast('Generated Barcode: ' + newBarcode);
-  };
-
-  window.resetScannerForm = function () {
-    scannerState.name = '';
-    scannerState.barcode = '890' + Math.floor(1000000000 + Math.random() * 9000000000);
-    scannerState.mrp = '';
-    scannerState.cost_price = '';
-    scannerState.category = 'Daily Staples';
-    scannerState.expiryDate = getFutureDate(30);
-    scannerState.daysLeft = 30;
-    scannerState.quantity = 1;
-    scannerState.batchCode = 'BT-' + Math.floor(1000 + Math.random() * 9000);
-
-    const nameInput = document.getElementById('scan-input-name');
-    const barcodeInput = document.getElementById('scan-input-barcode');
-    const mrpInput = document.getElementById('scan-input-mrp');
-    const costInput = document.getElementById('scan-input-cost');
-    const catInput = document.getElementById('scan-input-category');
-    const expiryInput = document.getElementById('scan-expiry-input');
-    const countInput = document.getElementById('intake-count-input');
-    const batchCodeEl = document.getElementById('scan-batch-code');
-
-    if (nameInput) nameInput.value = '';
-    if (barcodeInput) barcodeInput.value = scannerState.barcode;
-    if (mrpInput) mrpInput.value = '';
-    if (costInput) costInput.value = '';
-    if (catInput) catInput.value = scannerState.category;
-    if (expiryInput) expiryInput.value = scannerState.expiryDate;
-    if (countInput) countInput.value = 1;
-    if (batchCodeEl) batchCodeEl.textContent = `Batch: #${scannerState.batchCode}`;
-
-    showToast('Ready for new item!');
-    if (nameInput) nameInput.focus();
-  };
-
-  window.handleScannerExpiryChange = function (newDate) {
-    if (!newDate) return;
-    scannerState.expiryDate = newDate;
-    const days = Math.ceil((new Date(newDate) - new Date()) / (1000 * 60 * 60 * 24));
-    scannerState.daysLeft = Math.max(0, days);
-  };
-
-  window.handleQtyDirectInput = function (val) {
-    scannerState.quantity = Math.max(1, Number(val) || 1);
-  };
-
-  async function initCameraFeed() {
-    const video = document.getElementById('scanner-video');
-    const fallbackBg = document.getElementById('scanner-fallback-bg');
-    if (!video) return;
-
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment' }
-        });
-        cameraStream = stream;
-        video.srcObject = stream;
-        video.play();
-        video.classList.remove('hidden');
-        if (fallbackBg) fallbackBg.classList.add('hidden');
-      } catch (err) {
-        if (fallbackBg) fallbackBg.classList.remove('hidden');
-        video.classList.add('hidden');
-      }
-    }
+  if (!file) {
+    selectedProductImage = "";
+    preview.style.display = "none";
+    preview.src = "";
+    return;
   }
 
-  window.decrementIntakeCount = function () {
-    if (scannerState.quantity > 1) {
-      scannerState.quantity--;
-      const countInput = document.getElementById('intake-count-input');
-      if (countInput) countInput.value = scannerState.quantity;
-    }
-  };
+  compressImageFile(file, function (compressedData) {
+    selectedProductImage = compressedData;
+    preview.src = compressedData;
+    preview.style.display = "block";
+  });
+}
 
-  window.incrementIntakeCount = function () {
-    scannerState.quantity++;
-    const countInput = document.getElementById('intake-count-input');
-    if (countInput) countInput.value = scannerState.quantity;
-  };
-
-  window.confirmIntake = async function () {
-    const btn = document.getElementById('btn-confirm-intake');
-    if (!btn) return;
-
-    // Capture all details directly from input elements
-    const nameInput = document.getElementById('scan-input-name');
-    const barcodeInput = document.getElementById('scan-input-barcode');
-    const mrpInput = document.getElementById('scan-input-mrp');
-    const costInput = document.getElementById('scan-input-cost');
-    const catInput = document.getElementById('scan-input-category');
-    const expiryInput = document.getElementById('scan-expiry-input');
-    const countInput = document.getElementById('intake-count-input');
-
-    const name = nameInput ? nameInput.value.trim() : scannerState.name;
-    const barcode = barcodeInput && barcodeInput.value.trim() ? barcodeInput.value.trim() : (scannerState.barcode || '890' + Math.floor(1000000000 + Math.random() * 9000000000));
-    const mrp = mrpInput && mrpInput.value !== '' ? Number(mrpInput.value) : Number(scannerState.mrp || 0);
-    const cost = costInput && costInput.value !== '' ? Number(costInput.value) : Math.round(mrp * 0.8);
-    const category = catInput ? catInput.value : (scannerState.category || 'Daily Staples');
-    const expiryDate = expiryInput && expiryInput.value ? expiryInput.value : scannerState.expiryDate;
-    const quantity = countInput ? Math.max(1, Number(countInput.value) || 1) : scannerState.quantity;
-
-    if (!name) {
-      showToast('Please enter the Item Name', false);
-      if (nameInput) nameInput.focus();
-      return;
-    }
-
-    if (mrp <= 0) {
-      showToast('Please enter a valid Selling Price (MRP)', false);
-      if (mrpInput) mrpInput.focus();
-      return;
-    }
-
-    if (!expiryDate) {
-      showToast('Please select an Expiry Date', false);
-      if (expiryInput) expiryInput.focus();
-      return;
-    }
-
-    const originalHTML = btn.innerHTML;
-    btn.innerHTML = `<span class="material-symbols-outlined text-[20px] animate-spin">refresh</span><span>Saving Stock...</span>`;
-
-    try {
-      // 1. Check if product exists in live database (or insert / update)
-      let product = await window.SkitDB.getProductByBarcode(barcode);
-      if (!product) {
-        product = await window.SkitDB.addProduct({
-          barcode,
-          name,
-          category,
-          mrp,
-          cost_price: cost,
-          shelf_life_days: Math.max(1, Math.ceil((new Date(expiryDate) - new Date()) / (1000 * 60 * 60 * 24))),
-          unit: 'units'
-        });
+// Save entry in Supabase product_history table
+async function saveProductHistory(client, mobile, itemName, actionType, qtyChanged, imageData) {
+  var res = await client
+    .from("product_history")
+    .insert([
+      {
+        shop_mobile: mobile,
+        item_name: itemName,
+        action_type: actionType,
+        quantity_changed: qtyChanged,
+        image_data: imageData || ""
       }
+    ]);
 
-      // 2. Add batch under merchant store ID
-      const batchCode = scannerState.batchCode || ('BT-' + Math.floor(1000 + Math.random() * 9000));
-      await window.SkitDB.addBatch({
-        product_id: product.id,
-        product_name: product.name,
-        product_category: product.category,
-        product_image: product.image_url,
-        mrp: product.mrp,
-        cost_price: product.cost_price,
-        unit: product.unit || 'units',
-        batch_code: batchCode,
+  if (res.error) {
+    console.log("product_history error:", res.error.message);
+  }
+}
+
+// Save product batch to Supabase product_batches table
+async function handleAddProduct(event) {
+  event.preventDefault();
+  clearErrors();
+
+  var itemName = document.getElementById("item-name").value.trim();
+  var quantity = document.getElementById("item-quantity").value.trim();
+  var expiryDate = document.getElementById("item-expiry").value;
+  var itemDesc = document.getElementById("item-description").value.trim();
+  var hasError = false;
+
+  if (itemName === "") {
+    document.getElementById("item-name-error").innerText = "Enter item name";
+    hasError = true;
+  }
+
+  if (quantity === "" || Number(quantity) < 1) {
+    document.getElementById("item-quantity-error").innerText = "Enter valid quantity";
+    hasError = true;
+  }
+
+  if (expiryDate === "") {
+    document.getElementById("item-expiry-error").innerText = "Select expiry date";
+    hasError = true;
+  }
+
+  if (hasError) {
+    return;
+  }
+
+  setButtonLoading("add-product-form", true, "Saving...", "Add Product");
+
+  var client = await connectDatabase();
+  if (client === null) {
+    setButtonLoading("add-product-form", false, "Saving...", "Add Product");
+    document.getElementById("add-main-error").innerText = "Database not connected";
+    return;
+  }
+
+  var mobile = getLoggedInCookie();
+  var insertRes = await client
+    .from("product_batches")
+    .insert([
+      {
+        shop_mobile: mobile,
+        item_name: itemName,
+        quantity: Number(quantity),
         expiry_date: expiryDate,
-        quantity_on_hand: quantity
-      });
-
-      btn.innerHTML = `<span class="material-symbols-outlined text-[20px]">check_circle</span><span>Item Saved!</span>`;
-      btn.classList.remove('bg-primary');
-      btn.classList.add('bg-primary-container');
-
-      showToast(`Added ${quantity} units of ${name} to stock!`);
-
-      // Prepare fresh batch code for next item
-      scannerState.batchCode = 'BT-' + Math.floor(1000 + Math.random() * 9000);
-      scannerState.name = '';
-      scannerState.barcode = '';
-      scannerState.mrp = '';
-      scannerState.cost_price = '';
-
-      setTimeout(() => {
-        btn.innerHTML = originalHTML;
-        btn.classList.remove('bg-primary-container');
-        btn.classList.add('bg-primary');
-        navigateTo('dashboard');
-      }, 700);
-    } catch (e) {
-      console.error('[confirmIntake error]', e);
-      btn.innerHTML = originalHTML;
-      showToast('Error saving item: ' + (e.message || 'Check database'), false);
-    }
-  };
-
-  window.openManualEditModal = function () {
-    const modal = document.getElementById('manual-edit-modal');
-    if (!modal) return;
-
-    document.getElementById('manual-name').value = scannerState.name;
-    document.getElementById('manual-barcode').value = scannerState.barcode;
-    document.getElementById('manual-batch').value = scannerState.batchCode;
-    document.getElementById('manual-mrp').value = scannerState.mrp;
-    document.getElementById('manual-cost').value = scannerState.cost_price;
-    document.getElementById('manual-expiry').value = scannerState.expiryDate;
-    document.getElementById('manual-qty').value = scannerState.quantity;
-
-    modal.classList.remove('hidden');
-  };
-
-  window.closeManualEditModal = function () {
-    const modal = document.getElementById('manual-edit-modal');
-    if (modal) modal.classList.add('hidden');
-  };
-
-  window.saveManualEdit = function () {
-    scannerState.name = document.getElementById('manual-name').value.trim() || scannerState.name;
-    scannerState.barcode = document.getElementById('manual-barcode').value.trim() || scannerState.barcode;
-    scannerState.batchCode = document.getElementById('manual-batch').value.trim() || scannerState.batchCode;
-    scannerState.mrp = Number(document.getElementById('manual-mrp').value) || scannerState.mrp;
-    scannerState.cost_price = Number(document.getElementById('manual-cost').value) || scannerState.cost_price;
-    scannerState.expiryDate = document.getElementById('manual-expiry').value || scannerState.expiryDate;
-    scannerState.quantity = Number(document.getElementById('manual-qty').value) || 1;
-
-    // Recalculate days left
-    const days = Math.ceil((new Date(scannerState.expiryDate) - new Date()) / (1000 * 60 * 60 * 24));
-    scannerState.daysLeft = Math.max(0, days);
-
-    window.closeManualEditModal();
-    updateScannerDisplay();
-    showToast('Intake details updated');
-  };
-
-  // -------------------------------------------------------------
-  // Screen: Clearance & Freshness Markdown Engine (M4)
-  // -------------------------------------------------------------
-  async function renderClearance() {
-    const markdowns = await window.SkitDB.getMarkdowns();
-    const countReadyEl = document.getElementById('clearance-count-ready');
-    const profitEl = document.getElementById('clearance-profit-recovered');
-    const container = document.getElementById('clearance-cards-container');
-    const emptyState = document.getElementById('clearance-all-clear-state');
-
-    const totalProfit = markdowns.reduce((sum, m) => sum + m.total_profit, 0);
-    if (countReadyEl) countReadyEl.textContent = markdowns.length;
-    if (profitEl) profitEl.textContent = '₹' + totalProfit;
-
-    if (!container) return;
-
-    if (markdowns.length === 0) {
-      container.innerHTML = '';
-      if (emptyState) emptyState.classList.remove('hidden');
-      return;
-    }
-
-    if (emptyState) emptyState.classList.add('hidden');
-
-    container.innerHTML = markdowns
-      .map((item) => {
-        const isUrgent = item.days_left <= 2;
-        const pillBadgeClass = isUrgent
-          ? 'bg-error-container text-on-error-container font-bold'
-          : 'bg-secondary-fixed text-on-secondary-fixed font-semibold';
-        const pillIcon = isUrgent ? 'warning' : 'timer';
-
-        return `
-          <article class="suggestion-card bg-surface-container-lowest rounded-xl p-3 shadow-sm border border-outline-variant/20 transition-all duration-300" data-id="${item.id}">
-            <div class="flex items-center gap-3">
-              <div class="w-14 h-14 rounded-xl bg-surface-container overflow-hidden shrink-0 relative flex items-center justify-center">
-                <img alt="${item.product_name}" class="w-full h-full object-cover" src="${item.product_image || 'assets/images/shelf_illustration.png'}" onerror="this.src='assets/images/shelf_illustration.png'" />
-                <div class="absolute bottom-0 right-0 bg-on-background/70 text-surface-container-lowest text-[9px] font-bold px-1 rounded-tl">
-                  ${item.units}x
-                </div>
-              </div>
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center justify-between gap-1">
-                  <h3 class="text-sm font-semibold text-on-surface truncate">${item.product_name}</h3>
-                  <span class="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full ${pillBadgeClass} text-[10px] shrink-0">
-                    <span class="material-symbols-outlined text-[12px]">${pillIcon}</span>
-                    ${item.days_left}d left
-                  </span>
-                </div>
-                <div class="flex items-center gap-2 mt-1">
-                  <span class="text-base font-bold text-on-surface">₹${item.suggested_price}</span>
-                  <span class="text-[10px] bg-primary/15 text-primary px-1.5 py-0.5 rounded font-bold">${item.discount_pct}% OFF</span>
-                  <span class="text-xs text-outline line-through">₹${item.mrp}</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Action -->
-            <div class="mt-2.5 flex items-center gap-2">
-              <button 
-                class="flex-1 h-9 rounded-lg bg-primary text-on-primary text-xs font-semibold flex items-center justify-center gap-1 active:scale-98 transition shadow-sm" 
-                onclick="window.acceptClearance('${item.id}', '${item.batch_id}', ${item.units}, ${item.suggested_price}, '${item.product_name.replace(/'/g, "\\'")}')" 
-                type="button">
-                <span class="material-symbols-outlined text-[16px]">check</span>
-                Accept ₹${item.suggested_price}
-              </button>
-              <button 
-                class="w-9 h-9 rounded-lg bg-surface-container text-on-surface flex items-center justify-center active:scale-95 transition" 
-                onclick="window.dismissClearance('${item.id}')" 
-                title="Dismiss"
-                type="button">
-                <span class="material-symbols-outlined text-[16px]">close</span>
-              </button>
-            </div>
-          </article>
-        `;
-      })
-      .join('');
-  }
-
-  window.acceptClearance = async function (cardId, batchId, units, price, name) {
-    const card = document.querySelector(`[data-id="${cardId}"]`);
-    if (card) card.classList.add('scale-95', 'opacity-0');
-
-    try {
-      await window.SkitDB.deductBatchStock(batchId, units, 'discounted', price);
-      showToast(`${name} marked down to ₹${price} on POS!`);
-      setTimeout(async () => {
-        await renderClearance();
-      }, 250);
-    } catch (e) {
-      showToast('Error accepting clearance', false);
-    }
-  };
-
-  window.dismissClearance = function (cardId) {
-    const card = document.querySelector(`[data-id="${cardId}"]`);
-    if (card) {
-      card.classList.add('translate-x-full', 'opacity-0');
-      setTimeout(() => {
-        card.remove();
-        showToast('Clearance recommendation dismissed', false);
-      }, 250);
-    }
-  };
-
-  window.bulkAcceptClearance = async function () {
-    const markdowns = await window.SkitDB.getMarkdowns();
-    if (markdowns.length === 0) return;
-
-    for (const m of markdowns) {
-      await window.SkitDB.deductBatchStock(m.batch_id, m.units, 'discounted', m.suggested_price);
-    }
-
-    showToast(`All ${markdowns.length} markdowns pushed to POS system!`);
-    await renderClearance();
-  };
-
-  // -------------------------------------------------------------
-  // Screen: Inventory Catalog
-  // -------------------------------------------------------------
-  let inventoryCategoryFilter = 'all';
-
-  async function renderInventory() {
-    const products = await window.SkitDB.getProducts();
-    const batches = await window.SkitDB.getBatches();
-    const searchInput = document.getElementById('inventory-search');
-    const query = (searchInput ? searchInput.value : '').toLowerCase().trim();
-
-    // Reconstruct product records from batches if products list is empty
-    let allProducts = products;
-    if (allProducts.length === 0 && batches.length > 0) {
-      const seenIds = new Set();
-      allProducts = batches
-        .filter((b) => {
-          if (seenIds.has(String(b.product_id))) return false;
-          seenIds.add(String(b.product_id));
-          return true;
-        })
-        .map((b) => ({
-          id: b.product_id,
-          name: b.product_name || 'Item',
-          category: b.product_category || 'General',
-          mrp: b.mrp || 0,
-          cost_price: b.cost_price || 0,
-          unit: b.unit || 'units',
-          image_url: b.product_image,
-          barcode: b.batch_code || ''
-        }));
-    }
-
-    const filtered = allProducts.filter((p) => {
-      const pCat = (p.category || '').toLowerCase();
-      const matchesCat =
-        inventoryCategoryFilter === 'all' ||
-        pCat.includes(inventoryCategoryFilter.toLowerCase()) ||
-        (inventoryCategoryFilter === 'daily' && pCat.includes('staple'));
-      const matchesQuery = !query || (p.name && p.name.toLowerCase().includes(query)) || (p.barcode && String(p.barcode).includes(query));
-      return matchesCat && matchesQuery;
-    });
-
-    const container = document.getElementById('inventory-list-container');
-    if (!container) return;
-
-    if (filtered.length === 0) {
-      container.innerHTML = `
-        <div class="bg-surface-container-lowest rounded-2xl p-8 text-center text-on-surface-variant flex flex-col items-center">
-          <span class="material-symbols-outlined text-[36px] text-outline mb-2">search_off</span>
-          <p class="font-body-medium text-body-medium font-semibold text-on-surface">No Products Found</p>
-          <p class="text-xs text-on-surface-variant mt-1">Tap the Scan button to add stock.</p>
-        </div>
-      `;
-      return;
-    }
-
-    container.innerHTML = filtered
-      .map((p) => {
-        const prodBatches = batches.filter((b) => String(b.product_id) === String(p.id) && b.quantity_on_hand > 0);
-        const totalStock = prodBatches.reduce((sum, b) => sum + b.quantity_on_hand, 0);
-        const nearestExpiry = prodBatches.length > 0 ? Math.min(...prodBatches.map((b) => b.days_left)) : null;
-
-        const expiryBadge =
-          nearestExpiry !== null
-            ? nearestExpiry <= 3
-              ? `<span class="px-2 py-0.5 rounded-full bg-error-container text-on-error-container text-[10px] font-bold">${nearestExpiry}d left</span>`
-              : nearestExpiry <= 7
-              ? `<span class="px-2 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed text-[10px] font-bold">${nearestExpiry}d left</span>`
-              : `<span class="px-2 py-0.5 rounded-full bg-primary-fixed/25 text-primary text-[10px] font-bold">Fresh • ${nearestExpiry}d</span>`
-            : `<span class="px-2 py-0.5 rounded-full bg-surface-container-high text-outline text-[10px]">Out of Stock</span>`;
-
-        return `
-          <div class="bg-surface-container-lowest rounded-xl p-3 shadow-sm border border-outline-variant/20 flex items-center gap-3">
-            <div class="w-14 h-14 rounded-xl bg-surface-container-low overflow-hidden shrink-0 flex items-center justify-center">
-              <img src="${p.image_url || 'assets/images/shelf_illustration.png'}" alt="${p.name}" class="w-full h-full object-cover" onerror="this.src='assets/images/shelf_illustration.png'" />
-            </div>
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center justify-between gap-1">
-                <h4 class="text-sm font-semibold text-on-surface truncate">${p.name}</h4>
-                ${expiryBadge}
-              </div>
-              <div class="flex items-center gap-2 mt-0.5 text-xs text-on-surface-variant">
-                <span>Stock: <strong class="text-on-surface font-semibold">${totalStock}</strong> ${p.unit}</span>
-                <span>•</span>
-                <span>MRP: ₹${p.mrp}</span>
-                <span>•</span>
-                <span>Cost: ₹${p.cost_price}</span>
-              </div>
-              <div class="flex items-center gap-1 mt-1 text-on-surface-variant font-mono text-[11px]">
-                <span class="material-symbols-outlined text-[13px] text-outline">barcode</span>
-                <span>${p.barcode}</span>
-              </div>
-            </div>
-          </div>
-        `;
-      })
-      .join('');
-  }
-
-  window.filterInventoryCategory = function (cat) {
-    inventoryCategoryFilter = cat;
-    document.querySelectorAll('.cat-filter-btn').forEach((btn) => {
-      if (btn.dataset.category === cat) {
-        btn.classList.add('bg-primary', 'text-on-primary');
-        btn.classList.remove('bg-surface-container', 'text-on-surface');
-      } else {
-        btn.classList.remove('bg-primary', 'text-on-primary');
-        btn.classList.add('bg-surface-container', 'text-on-surface');
+        description: itemDesc,
+        image_data: selectedProductImage
       }
-    });
-    renderInventory();
-  };
+    ]);
 
-  // -------------------------------------------------------------
-  // Screen: Settings & Store Profile (NO Credentials Form)
-  // -------------------------------------------------------------
-  async function renderSettings() {
-    const merchant = window.SkitDB.getMerchant();
-    if (!merchant) return;
+  setButtonLoading("add-product-form", false, "Saving...", "Add Product");
 
-    const nameInput = document.getElementById('settings-store-name');
-    const locInput = document.getElementById('settings-store-loc');
-    const phoneEl = document.getElementById('settings-merchant-phone');
-    const statusPill = document.getElementById('settings-supabase-status');
+  if (insertRes.error) {
+    document.getElementById("add-main-error").innerText = "Database error: " + insertRes.error.message;
+    return;
+  }
 
-    if (nameInput) nameInput.value = merchant.store_name || '';
-    if (locInput) locInput.value = merchant.location || '';
-    if (phoneEl) phoneEl.textContent = '+91 ' + merchant.phone;
+  await saveProductHistory(client, mobile, itemName, "added", Number(quantity), selectedProductImage);
 
-    if (statusPill) {
-      if (window.SkitDB.supabase) {
-        statusPill.innerHTML = `
-          <span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
-          <span class="text-primary font-semibold">Supabase Cloud Connected</span>
-        `;
-      } else {
-        statusPill.innerHTML = `
-          <span class="w-2 h-2 rounded-full bg-secondary"></span>
-          <span class="text-secondary font-semibold">Offline PWA Storage Active</span>
-        `;
-      }
+  document.getElementById("add-product-form").reset();
+  selectedProductImage = "";
+  var preview = document.getElementById("item-preview");
+  if (preview) {
+    preview.style.display = "none";
+    preview.src = "";
+  }
+  document.getElementById("add-success").innerText = "Product batch added!";
+}
+
+// Escape HTML for safe display
+function escapeHtml(text) {
+  var div = document.createElement("div");
+  div.innerText = text;
+  return div.innerHTML;
+}
+
+// Helper to render product thumbnail safely
+function getThumbHtml(imageData) {
+  if (imageData && imageData.indexOf("data:image") === 0) {
+    return "<img src='" + imageData + "' class='item-thumb' alt='Product' />";
+  }
+  return "<div class='item-thumb'></div>";
+}
+
+// Helper to set active filter button
+function updateFilterButtons(btn) {
+  if (!btn || !btn.parentElement) return;
+  var btns = btn.parentElement.getElementsByClassName("filter-btn");
+  for (var i = 0; i < btns.length; i++) {
+    btns[i].classList.remove("active");
+  }
+  btn.classList.add("active");
+}
+
+// Helper to filter items by search text and stock status
+function filterByStockAndSearch(items, searchText, filterType) {
+  var result = [];
+  for (var i = 0; i < items.length; i++) {
+    var item = items[i];
+    var matchesSearch = item.item_name.toLowerCase().indexOf(searchText) !== -1;
+    var matchesFilter = true;
+
+    if (filterType === "instock") {
+      matchesFilter = item.quantity > 0;
+    } else if (filterType === "outofstock") {
+      matchesFilter = item.quantity <= 0;
+    } else if (filterType === "nearexpire") {
+      matchesFilter = item.quantity > 0 && isNearExpire(item.expiry_date);
+    } else if (filterType === "lowstock") {
+      matchesFilter = item.quantity > 0 && item.quantity <= 5;
+    }
+
+    if (matchesSearch && matchesFilter) {
+      result.push(item);
+    }
+  }
+  return result;
+}
+
+// Check if an item expires within 7 days (or already expired)
+function isNearExpire(expiryDateStr) {
+  if (!expiryDateStr) return false;
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  var expiry = new Date(expiryDateStr + "T00:00:00");
+  var diffDays = (expiry - today) / (1000 * 60 * 60 * 24);
+  return diffDays <= 7;
+}
+
+// ==========================================================================
+// Home Dashboard (Total Items, Near Expire 7d, Clickable All Items List)
+// ==========================================================================
+
+var allHomeItems = [];
+var currentHomeFilter = "all";
+
+async function loadHomeDashboard(client, mobile) {
+  var totalEl = document.getElementById("home-total-items");
+  var nearEl = document.getElementById("home-near-expire");
+  var listEl = document.getElementById("home-items-list");
+  if (!totalEl || !nearEl || !listEl) return;
+
+  var res = await client
+    .from("product_batches")
+    .select("*")
+    .eq("shop_mobile", mobile)
+    .order("expiry_date", { ascending: true });
+
+  if (res.error) {
+    listEl.innerHTML = "<p class='empty-text'>Error loading items.</p>";
+    return;
+  }
+
+  allHomeItems = res.data || [];
+  var nearCount = 0;
+
+  for (var i = 0; i < allHomeItems.length; i++) {
+    if (allHomeItems[i].quantity > 0 && isNearExpire(allHomeItems[i].expiry_date)) {
+      nearCount++;
     }
   }
 
-  window.saveStoreSettings = async function () {
-    const store_name = document.getElementById('settings-store-name').value.trim();
-    const location = document.getElementById('settings-store-loc').value.trim();
+  totalEl.innerText = allHomeItems.length;
+  nearEl.innerText = nearCount;
+  filterHomeItems();
+}
 
-    try {
-      await window.SkitDB.updateMerchantProfile({ store_name, location });
-      showToast('Store profile updated successfully');
-    } catch (e) {
-      showToast('Error updating store profile', false);
-    }
-  };
+function setHomeFilter(filterType, btn) {
+  currentHomeFilter = filterType;
+  updateFilterButtons(btn);
+  filterHomeItems();
+}
 
-  window.handleLogout = function () {
-    if (confirm('Are you sure you want to log out of your store?')) {
-      window.SkitDB.logout();
-      showToast('Logged out successfully');
-      navigateTo('welcome');
-    }
-  };
+function filterHomeItems() {
+  var searchEl = document.getElementById("home-search");
+  var query = searchEl ? searchEl.value.trim().toLowerCase() : "";
+  var filtered = filterByStockAndSearch(allHomeItems, query, currentHomeFilter);
+  renderHomeItems(filtered);
+}
 
-  // -------------------------------------------------------------
-  // Authentication & Registration Handlers (One-Time 1111 OTP)
-  // -------------------------------------------------------------
-  window.handleLogin = async function () {
-    const phone = document.getElementById('login-phone').value.trim();
-    const pin = document.getElementById('login-pin').value.trim();
-    const btn = document.getElementById('btn-login-submit');
+function renderHomeItems(items) {
+  var listEl = document.getElementById("home-items-list");
+  if (!listEl) return;
 
-    if (btn) btn.innerHTML = '<span class="material-symbols-outlined text-[18px] animate-spin">refresh</span> Logging in...';
-
-    try {
-      await window.SkitDB.loginMerchantWithPin(phone, pin);
-      showToast('Login successful! Welcome back.');
-      navigateTo('dashboard');
-    } catch (e) {
-      showToast(e.message || 'Login failed', false);
-    } finally {
-      if (btn) btn.innerHTML = '<span>Log In</span><span class="material-symbols-outlined text-[18px]">arrow_forward</span>';
-    }
-  };
-
-  window.handleSignup = async function () {
-    const phone = document.getElementById('signup-phone').value.trim();
-    const otp = document.getElementById('signup-otp').value.trim();
-    const pin = document.getElementById('signup-pin').value.trim();
-    const storeName = document.getElementById('signup-store-name').value.trim();
-    const storeLoc = document.getElementById('signup-store-loc').value.trim();
-    const btn = document.getElementById('btn-signup-submit');
-
-    if (!storeName) {
-      showToast('Please enter your Store Name', false);
-      return;
-    }
-    if (!storeLoc) {
-      showToast('Please enter your Store Location', false);
-      return;
-    }
-
-    if (btn) btn.innerHTML = '<span class="material-symbols-outlined text-[18px] animate-spin">refresh</span> Verifying OTP & Registering...';
-
-    try {
-      // One-time 1111 OTP bypass verification & save to Supabase merchants table
-      await window.SkitDB.registerMerchantWithOTP(phone, otp, pin, storeName, storeLoc);
-      showToast('Store registered and verified successfully!');
-      navigateTo('dashboard');
-    } catch (e) {
-      showToast(e.message || 'Registration failed', false);
-    } finally {
-      if (btn) btn.innerHTML = '<span>Verify &amp; Register</span><span class="material-symbols-outlined text-[18px]">arrow_forward</span>';
-    }
-  };
-
-  window.requestLaunchOTP = function () {
-    const otpInput = document.getElementById('signup-otp');
-    if (otpInput) {
-      otpInput.value = '1111';
-      showToast('Launch test OTP filled: 1111');
-    }
-  };
-
-  window.togglePinVisibility = function (inputId) {
-    const input = document.getElementById(inputId);
-    if (!input) return;
-    input.type = input.type === 'password' ? 'text' : 'password';
-  };
-
-  // -------------------------------------------------------------
-  // PWA Support & Lifecycles
-  // -------------------------------------------------------------
-  window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    deferredInstallPrompt = e;
-    const banner = document.getElementById('pwa-install-banner');
-    if (banner) banner.classList.remove('hidden');
-  });
-
-  window.installPWA = function () {
-    if (deferredInstallPrompt) {
-      deferredInstallPrompt.prompt();
-      deferredInstallPrompt.userChoice.then(() => {
-        deferredInstallPrompt = null;
-      });
-    } else {
-      showToast('To install: Tap your browser menu and choose "Add to Home screen"');
-    }
-  };
-
-  // Register Service Worker
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker
-        .register('/sw.js')
-        .then((reg) => console.log('[SKIT PWA] Service Worker registered:', reg.scope))
-        .catch((err) => console.warn('[SKIT PWA] Service Worker registration error:', err));
-    });
+  if (items.length === 0) {
+    listEl.innerHTML = "<p class='empty-text'>No matching items found.</p>";
+    return;
   }
 
-  // Hash Navigation Handler
-  window.addEventListener('hashchange', handleRoute);
+  var html = "";
+  for (var j = 0; j < items.length; j++) {
+    var item = items[j];
+    var stockBadge = item.quantity <= 0
+      ? "<span class='out-of-stock'>Out of Stock</span>"
+      : "<p>Left: <strong>" + item.quantity + "</strong></p>";
 
-  document.addEventListener('DOMContentLoaded', () => {
-    if (!window.location.hash) {
-      window.location.hash = '#welcome';
-    }
-    handleRoute();
+    var expireBadge = isNearExpire(item.expiry_date)
+      ? "<span class='near-expire'>Near Expire</span>"
+      : "";
 
-    const invSearch = document.getElementById('inventory-search');
-    if (invSearch) {
-      invSearch.addEventListener('input', renderInventory);
+    var descText = item.description
+      ? "<p class='item-desc'>" + escapeHtml(item.description) + "</p>"
+      : "";
+
+    html +=
+      "<div class='item-card clickable-card' onclick=\"window.location.href='inventory.html?edit=" + item.id + "'\">" +
+        getThumbHtml(item.image_data) +
+        "<div class='item-info'>" +
+          "<p class='item-name'>" + escapeHtml(item.item_name) + "</p>" +
+          stockBadge +
+          expireBadge +
+          descText +
+          "<p>Expiry: " + escapeHtml(item.expiry_date) + "</p>" +
+        "</div>" +
+      "</div>";
+  }
+
+  listEl.innerHTML = html;
+}
+
+// ==========================================================================
+// Inventory Page (View, Search, Filter, +1/-1, Edit, All Sold, Delete)
+// ==========================================================================
+
+var allInventoryItems = [];
+var currentInventoryFilter = "all";
+var editNewImage = "";
+
+async function loadInventory(client, mobile) {
+  var listEl = document.getElementById("inventory-list");
+  if (!listEl) return;
+
+  var res = await client
+    .from("product_batches")
+    .select("*")
+    .eq("shop_mobile", mobile)
+    .order("expiry_date", { ascending: true });
+
+  if (res.error) {
+    listEl.innerHTML = "<p class='empty-text'>Error loading inventory.</p>";
+    return;
+  }
+
+  allInventoryItems = res.data || [];
+  filterInventory();
+
+  // If redirected from Home item click (?edit=ID), open edit box automatically
+  var params = new URLSearchParams(window.location.search);
+  var editId = params.get("edit");
+  if (editId) {
+    openEditBox(Number(editId));
+  }
+}
+
+function setInventoryFilter(filterType, btn) {
+  currentInventoryFilter = filterType;
+  updateFilterButtons(btn);
+  filterInventory();
+}
+
+function filterInventory() {
+  var searchEl = document.getElementById("inventory-search");
+  var query = searchEl ? searchEl.value.trim().toLowerCase() : "";
+  var filtered = filterByStockAndSearch(allInventoryItems, query, currentInventoryFilter);
+  renderInventory(filtered);
+}
+
+function renderInventory(items) {
+  var listEl = document.getElementById("inventory-list");
+  if (!listEl) return;
+
+  if (items.length === 0) {
+    listEl.innerHTML = "<p class='empty-text'>No products found.</p>";
+    return;
+  }
+
+  var html = "";
+  for (var i = 0; i < items.length; i++) {
+    var item = items[i];
+    var stockBadge = item.quantity <= 0
+      ? "<span class='out-of-stock'>Out of Stock</span>"
+      : "<p>Left: <strong>" + item.quantity + "</strong></p>";
+
+    var expireBadge = isNearExpire(item.expiry_date)
+      ? "<span class='near-expire'>Near Expire</span>"
+      : "";
+
+    var actionButtons = item.quantity <= 0
+      ? "<button type='button' class='mini-btn red' onclick='deleteItem(" + item.id + ")'>Delete</button>"
+      : "<button type='button' class='sold-btn' onclick='openSoldPopup(" + item.id + ")'>Sold</button>" +
+        "<button type='button' class='mini-btn blue' onclick='openEditBox(" + item.id + ")'>Edit</button>";
+
+    var descText = item.description
+      ? "<p class='item-desc'>" + escapeHtml(item.description) + "</p>"
+      : "";
+
+    html +=
+      "<div class='item-card-wrap'>" +
+        "<div class='item-card-top'>" +
+          getThumbHtml(item.image_data) +
+          "<div class='item-info'>" +
+            "<p class='item-name'>" + escapeHtml(item.item_name) + "</p>" +
+            stockBadge +
+            expireBadge +
+            descText +
+            "<p>Expiry: " + escapeHtml(item.expiry_date) + "</p>" +
+          "</div>" +
+        "</div>" +
+        "<div class='item-actions'>" +
+          actionButtons +
+        "</div>" +
+      "</div>";
+  }
+
+  listEl.innerHTML = html;
+}
+
+function findInventoryItem(itemId) {
+  for (var i = 0; i < allInventoryItems.length; i++) {
+    if (allInventoryItems[i].id === itemId) {
+      return allInventoryItems[i];
     }
+  }
+  return null;
+}
+
+async function changeQty(itemId, delta) {
+  var item = findInventoryItem(itemId);
+  if (!item) return;
+
+  var newQty = item.quantity + delta;
+  if (newQty < 0) newQty = 0;
+  if (newQty === item.quantity) return;
+
+  var client = await connectDatabase();
+  if (!client) return;
+
+  var res = await client
+    .from("product_batches")
+    .update({ quantity: newQty })
+    .eq("id", itemId);
+
+  if (res.error) return;
+
+  var action = delta > 0 ? "added" : "sold";
+  await saveProductHistory(client, getLoggedInCookie(), item.item_name, action, Math.abs(delta), item.image_data);
+
+  document.getElementById("inventory-msg").innerText = "Updated " + item.item_name + " (" + newQty + " left)";
+  await loadInventory(client, getLoggedInCookie());
+}
+
+async function markAllSold(itemId) {
+  var item = findInventoryItem(itemId);
+  if (!item || item.quantity <= 0) return;
+
+  var client = await connectDatabase();
+  if (!client) return;
+
+  var soldQty = item.quantity;
+  var res = await client
+    .from("product_batches")
+    .update({ quantity: 0 })
+    .eq("id", itemId);
+
+  if (res.error) return;
+
+  await saveProductHistory(client, getLoggedInCookie(), item.item_name, "sold", soldQty, item.image_data);
+
+  document.getElementById("inventory-msg").innerText = item.item_name + " marked Out of Stock!";
+  await loadInventory(client, getLoggedInCookie());
+}
+
+async function deleteItem(itemId) {
+  var client = await connectDatabase();
+  if (!client) return;
+
+  var res = await client
+    .from("product_batches")
+    .delete()
+    .eq("id", itemId);
+
+  if (res.error) return;
+
+  document.getElementById("inventory-msg").innerText = "Item deleted!";
+  await loadInventory(client, getLoggedInCookie());
+}
+
+function openEditBox(itemId) {
+  var item = findInventoryItem(itemId);
+  if (!item) return;
+
+  document.getElementById("edit-item-id").value = item.id;
+  document.getElementById("edit-item-name").value = item.item_name;
+  document.getElementById("edit-item-qty").value = item.quantity;
+  document.getElementById("edit-item-expiry").value = item.expiry_date;
+  document.getElementById("edit-item-description").value = item.description || "";
+  document.getElementById("edit-item-image").value = "";
+
+  editNewImage = item.image_data || "";
+  var preview = document.getElementById("edit-item-preview");
+  if (editNewImage) {
+    preview.src = editNewImage;
+    preview.style.display = "block";
+  } else {
+    preview.style.display = "none";
+    preview.src = "";
+  }
+
+  document.getElementById("edit-popup").classList.add("open");
+}
+
+function closeEditBox() {
+  closeCamera("edit");
+  document.getElementById("edit-popup").classList.remove("open");
+}
+
+function stepEditQty(delta) {
+  var qtyInput = document.getElementById("edit-item-qty");
+  var val = Number(qtyInput.value) + delta;
+  if (isNaN(val) || val < 0) val = 0;
+  qtyInput.value = val;
+}
+
+async function markAllSoldFromEdit() {
+  var itemId = Number(document.getElementById("edit-item-id").value);
+  closeEditBox();
+  await markAllSold(itemId);
+}
+
+async function deleteFromEdit() {
+  var itemId = Number(document.getElementById("edit-item-id").value);
+  closeEditBox();
+  await deleteItem(itemId);
+}
+
+function openSoldPopup(itemId) {
+  var item = findInventoryItem(itemId);
+  if (!item || item.quantity <= 0) return;
+
+  document.getElementById("sold-popup-id").value = item.id;
+  document.getElementById("sold-popup-name").innerText = item.item_name + " (" + item.quantity + " left)";
+  var qtyInput = document.getElementById("sold-popup-qty");
+  qtyInput.value = 1;
+  qtyInput.max = item.quantity;
+
+  document.getElementById("sold-popup").classList.add("open");
+}
+
+function closeSoldPopup() {
+  document.getElementById("sold-popup").classList.remove("open");
+}
+
+async function confirmSoldPopup() {
+  var itemId = Number(document.getElementById("sold-popup-id").value);
+  var item = findInventoryItem(itemId);
+  if (!item || item.quantity <= 0) return;
+
+  var soldCount = Number(document.getElementById("sold-popup-qty").value);
+  if (isNaN(soldCount) || soldCount < 1) soldCount = 1;
+  if (soldCount > item.quantity) soldCount = item.quantity;
+
+  closeSoldPopup();
+  await changeQty(itemId, -soldCount);
+}
+
+function previewEditImage(event) {
+  var file = event.target.files[0];
+  var preview = document.getElementById("edit-item-preview");
+  if (!file) return;
+
+  compressImageFile(file, function (compressedData) {
+    editNewImage = compressedData;
+    preview.src = compressedData;
+    preview.style.display = "block";
   });
-})(window, document);
+}
+
+async function saveEditedItem() {
+  var itemId = Number(document.getElementById("edit-item-id").value);
+  var newName = document.getElementById("edit-item-name").value.trim();
+  var newQty = Number(document.getElementById("edit-item-qty").value);
+  var newExpiry = document.getElementById("edit-item-expiry").value;
+  var newDesc = document.getElementById("edit-item-description").value.trim();
+
+  if (newName === "" || isNaN(newQty) || newQty < 0 || newExpiry === "") {
+    return;
+  }
+
+  var client = await connectDatabase();
+  if (!client) return;
+
+  var oldItem = findInventoryItem(itemId);
+  var res = await client
+    .from("product_batches")
+    .update({
+      item_name: newName,
+      quantity: newQty,
+      expiry_date: newExpiry,
+      description: newDesc,
+      image_data: editNewImage
+    })
+    .eq("id", itemId);
+
+  if (res.error) return;
+
+  if (oldItem && newQty !== oldItem.quantity) {
+    var diff = newQty - oldItem.quantity;
+    var action = diff > 0 ? "added" : "sold";
+    await saveProductHistory(client, getLoggedInCookie(), newName, action, Math.abs(diff), editNewImage);
+  }
+
+  closeEditBox();
+  document.getElementById("inventory-msg").innerText = "Item updated!";
+  await loadInventory(client, getLoggedInCookie());
+}
+
+// ==========================================================================
+// History Page (Search, All / Only Added / Only Sold)
+// ==========================================================================
+
+var allHistoryItems = [];
+var currentHistoryFilter = "all";
+
+async function loadHistory(client, mobile) {
+  var listEl = document.getElementById("history-list");
+  if (!listEl) return;
+
+  var res = await client
+    .from("product_history")
+    .select("*")
+    .eq("shop_mobile", mobile)
+    .order("created_at", { ascending: false });
+
+  if (res.error) {
+    listEl.innerHTML = "<p class='empty-text'>Error loading history.</p>";
+    return;
+  }
+
+  allHistoryItems = res.data || [];
+  filterHistory();
+}
+
+function setHistoryFilter(filterType, btn) {
+  currentHistoryFilter = filterType;
+  updateFilterButtons(btn);
+  filterHistory();
+}
+
+function filterHistory() {
+  var searchEl = document.getElementById("history-search");
+  var query = searchEl ? searchEl.value.trim().toLowerCase() : "";
+  var filtered = [];
+
+  var todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  var weekAgo = new Date(todayStart.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+  for (var i = 0; i < allHistoryItems.length; i++) {
+    var row = allHistoryItems[i];
+    var matchesSearch = row.item_name.toLowerCase().indexOf(query) !== -1;
+    var matchesFilter = true;
+
+    if (currentHistoryFilter === "added" || currentHistoryFilter === "sold") {
+      matchesFilter = row.action_type === currentHistoryFilter;
+    } else if (currentHistoryFilter === "today") {
+      matchesFilter = row.created_at && new Date(row.created_at) >= todayStart;
+    } else if (currentHistoryFilter === "week") {
+      matchesFilter = row.created_at && new Date(row.created_at) >= weekAgo;
+    }
+
+    if (matchesSearch && matchesFilter) {
+      filtered.push(row);
+    }
+  }
+
+  renderHistory(filtered);
+}
+
+function renderHistory(items) {
+  var listEl = document.getElementById("history-list");
+  if (!listEl) return;
+
+  if (items.length === 0) {
+    listEl.innerHTML = "<p class='empty-text'>No history found.</p>";
+    return;
+  }
+
+  var html = "";
+  for (var i = 0; i < items.length; i++) {
+    var row = items[i];
+    var badge = row.action_type === "added"
+      ? "<span class='badge-added'>Added +" + row.quantity_changed + "</span>"
+      : "<span class='badge-sold'>Sold -" + row.quantity_changed + "</span>";
+
+    var dateText = row.created_at ? new Date(row.created_at).toLocaleString() : "";
+
+    html +=
+      "<div class='item-card'>" +
+      getThumbHtml(row.image_data) +
+      "<div class='item-info'>" +
+      "<p class='item-name'>" + escapeHtml(row.item_name) + "</p>" +
+      badge +
+      "<p>" + escapeHtml(dateText) + "</p>" +
+      "</div>" +
+      "</div>";
+  }
+
+  listEl.innerHTML = html;
+}
+
+// Keep user logged in until they press Logout
+window.onload = async function () {
+  var mobile = getLoggedInCookie();
+  var path = window.location.pathname;
+  var onAppPage =
+    path.indexOf("home.html") !== -1 ||
+    path.indexOf("add.html") !== -1 ||
+    path.indexOf("inventory.html") !== -1 ||
+    path.indexOf("history.html") !== -1 ||
+    path.indexOf("profile.html") !== -1;
+
+  if (mobile === "") {
+    if (onAppPage) {
+      window.location.href = "login.html";
+    }
+    return;
+  }
+
+  var client = await connectDatabase();
+  if (client === null) {
+    return;
+  }
+
+  var tasks = [
+    client
+      .from("login_history")
+      .select("is_logged_in")
+      .eq("mobile", mobile)
+      .order("login_time", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+  ];
+
+  if (onAppPage) {
+    tasks.push(loadUserInfo(client, mobile));
+    if (path.indexOf("home.html") !== -1) {
+      tasks.push(loadHomeDashboard(client, mobile));
+    }
+    if (path.indexOf("inventory.html") !== -1) {
+      tasks.push(loadInventory(client, mobile));
+    }
+    if (path.indexOf("history.html") !== -1) {
+      tasks.push(loadHistory(client, mobile));
+    }
+  }
+
+  var results = await Promise.all(tasks);
+  var lastRecord = results[0];
+
+  // Only keep logged in if Supabase has an active login row (or if DB check failed)
+  if (!lastRecord.error && (!lastRecord.data || lastRecord.data.is_logged_in === false)) {
+    clearLoggedInCookie();
+    if (onAppPage) {
+      window.location.href = "login.html";
+    }
+    return;
+  }
+
+  if (!onAppPage) {
+    window.location.href = isInPagesFolder() ? "home.html" : "pages/home.html";
+  }
+};

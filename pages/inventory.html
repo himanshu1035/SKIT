@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#3b5998" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>Inventory - SKIT Shop</title>
+  <link rel="manifest" href="../manifest.json" />
+  <link rel="apple-touch-icon" href="../icons/icon.svg" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+
+  <div class="mobile-box app-screen">
+
+    <!-- Top Bar -->
+    <div class="top-bar">
+      <button type="button" class="hamburger-btn" onclick="toggleMenu()">&#9776;</button>
+      <span id="top-shop-name" class="top-shop-name"></span>
+      <div class="top-right-icons">
+        <a href="history.html" class="top-icon-btn" title="History">&#128339;</a>
+        <a href="profile.html" id="profile-btn" class="profile-circle"></a>
+      </div>
+    </div>
+
+    <!-- Main Area: Search, Filter & Inventory List -->
+    <div class="main-area">
+      <h2>Inventory</h2>
+
+      <input
+        type="text"
+        id="inventory-search"
+        class="search-bar"
+        placeholder="Search inventory..."
+        oninput="filterInventory()"
+      />
+
+      <div class="filter-bar">
+        <button type="button" class="filter-btn active" onclick="setInventoryFilter('all', this)">All</button>
+        <button type="button" class="filter-btn" onclick="setInventoryFilter('instock', this)">In Stock</button>
+        <button type="button" class="filter-btn" onclick="setInventoryFilter('nearexpire', this)">Near Expire</button>
+        <button type="button" class="filter-btn" onclick="setInventoryFilter('lowstock', this)">Low Stock</button>
+        <button type="button" class="filter-btn" onclick="setInventoryFilter('outofstock', this)">Out of Stock</button>
+      </div>
+
+      <p id="inventory-msg" class="success-msg"></p>
+
+      <div id="inventory-list" class="item-list">
+        <p class="empty-text">Loading...</p>
+      </div>
+    </div>
+
+    <!-- Bottom Navigation Bar (Home, Inventory, Add, History, Profile) -->
+    <div class="bottom-nav">
+      <a href="home.html" class="nav-item">
+        <span class="nav-icon">&#127968;</span>
+        <span>Home</span>
+      </a>
+      <a href="inventory.html" class="nav-item active">
+        <span class="nav-icon">&#128230;</span>
+        <span>Inventory</span>
+      </a>
+      <a href="add.html" class="nav-item">
+        <span class="nav-icon">+</span>
+        <span>Add</span>
+      </a>
+      <a href="history.html" class="nav-item">
+        <span class="nav-icon">&#128339;</span>
+        <span>History</span>
+      </a>
+      <a href="profile.html" class="nav-item">
+        <span class="nav-icon">&#128100;</span>
+        <span>Profile</span>
+      </a>
+    </div>
+
+    <!-- Sold Popup -->
+    <div id="sold-popup" class="popup-overlay" onclick="closeSoldPopup()">
+      <div class="popup-box" onclick="event.stopPropagation()">
+        <h3>Mark Sold</h3>
+        <p id="sold-popup-name" style="margin-bottom: 10px; font-weight: bold;"></p>
+        <input type="hidden" id="sold-popup-id" />
+        <div class="field">
+          <label for="sold-popup-qty">Quantity Sold</label>
+          <input type="number" id="sold-popup-qty" min="1" value="1" />
+        </div>
+        <button type="button" class="btn btn-blue" onclick="confirmSoldPopup()">Confirm Sold</button>
+        <button type="button" class="btn btn-gray" onclick="closeSoldPopup()">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Edit Item Popup (Increase/Decrease Qty, Edit Name/Expiry/Photo, All Sold, Delete) -->
+    <div id="edit-popup" class="popup-overlay" onclick="closeEditBox()">
+      <div class="popup-box" onclick="event.stopPropagation()">
+        <h3>Edit Item</h3>
+        <input type="hidden" id="edit-item-id" />
+
+        <div class="field">
+          <label for="edit-item-name">Item Name</label>
+          <input type="text" id="edit-item-name" />
+        </div>
+
+        <div class="field">
+          <label for="edit-item-qty">Quantity</label>
+          <div class="qty-row">
+            <button type="button" class="qty-btn" onclick="stepEditQty(-1)">-</button>
+            <input type="number" id="edit-item-qty" min="0" />
+            <button type="button" class="qty-btn" onclick="stepEditQty(1)">+</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="edit-item-expiry">Expiry Date</label>
+          <input type="date" id="edit-item-expiry" />
+        </div>
+
+        <div class="field">
+          <label for="edit-item-description">Description (optional)</label>
+          <textarea id="edit-item-description" rows="2" placeholder="Enter product description"></textarea>
+        </div>
+
+        <div class="field">
+          <label for="edit-item-image">Change Photo (optional)</label>
+          <input type="file" id="edit-item-image" accept="image/*,.heic,.heif" onchange="previewEditImage(event)" />
+          <button type="button" class="btn btn-gray" onclick="openCamera('edit')">Take Photo (Camera)</button>
+          <div id="edit-camera-box" class="camera-box">
+            <video id="edit-camera-video" class="camera-video" autoplay playsinline></video>
+            <button type="button" class="btn btn-blue" onclick="capturePhoto('edit')">Capture Photo</button>
+            <button type="button" class="btn btn-gray" onclick="closeCamera('edit')">Close Camera</button>
+          </div>
+          <img id="edit-item-preview" class="image-preview" alt="Preview" />
+        </div>
+
+        <button type="button" class="btn btn-blue" onclick="saveEditedItem()">Save Changes</button>
+        <button type="button" class="btn btn-gray" onclick="markAllSoldFromEdit()">All Sold</button>
+        <button type="button" class="btn btn-gray" style="color: red;" onclick="deleteFromEdit()">Delete Item</button>
+        <button type="button" class="btn btn-gray" onclick="closeEditBox()">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Hamburger Side Menu -->
+    <div id="side-menu-overlay" class="menu-overlay" onclick="toggleMenu()">
+      <div class="side-menu" onclick="event.stopPropagation()">
+        <div>
+          <button type="button" class="close-menu-btn" onclick="toggleMenu()">&times;</button>
+          <p class="menu-title">Menu</p>
+          <div class="menu-links">
+            <a href="home.html" class="menu-link">&#127968; Home</a>
+            <a href="inventory.html" class="menu-link">&#128230; Inventory</a>
+            <a href="add.html" class="menu-link">&#10133; Add Product</a>
+            <a href="history.html" class="menu-link">&#128339; History</a>
+            <a href="profile.html" class="menu-link">&#128100; Profile Settings</a>
+          </div>
+        </div>
+        <button type="button" id="logout-btn" class="btn btn-gray" onclick="handleLogout()">Logout</button>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
+  <script src="../js/app.js"></script>
+</body>
+</html>

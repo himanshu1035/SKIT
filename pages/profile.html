@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#3b5998" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>Profile Settings - SKIT Shop</title>
+  <link rel="manifest" href="../manifest.json" />
+  <link rel="apple-touch-icon" href="../icons/icon.svg" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+
+  <div class="mobile-box app-screen">
+
+    <!-- Top Bar -->
+    <div class="top-bar">
+      <button type="button" class="hamburger-btn" onclick="toggleMenu()">&#9776;</button>
+      <span id="top-shop-name" class="top-shop-name"></span>
+      <div class="top-right-icons">
+        <a href="history.html" class="top-icon-btn" title="History">&#128339;</a>
+        <a href="profile.html" id="profile-btn" class="profile-circle"></a>
+      </div>
+    </div>
+
+    <!-- Main Area: Profile Settings Form -->
+    <div class="main-area">
+      <h2>Profile Settings</h2>
+      <p id="profile-main-error" class="main-error"></p>
+      <p id="profile-success" class="success-msg"></p>
+
+      <form id="profile-form" onsubmit="handleProfileSave(event)">
+        <div class="field">
+          <label for="profile-shop">Shop Name</label>
+          <input type="text" id="profile-shop" placeholder="Enter shop name" />
+          <div id="profile-shop-error" class="error"></div>
+        </div>
+
+        <div class="field">
+          <label for="profile-mobile">Mobile Number</label>
+          <input type="tel" id="profile-mobile" placeholder="10-digit mobile number" maxlength="10" />
+          <div id="profile-mobile-error" class="error"></div>
+        </div>
+
+        <div class="field">
+          <label for="profile-password">New Password (optional)</label>
+          <div class="password-box">
+            <input type="password" id="profile-password" placeholder="Leave blank to keep old password" />
+            <button type="button" class="show-btn" onclick="togglePassword('profile-password', this)">
+              Show
+            </button>
+          </div>
+          <div id="profile-password-error" class="error"></div>
+        </div>
+
+        <div class="field">
+          <label for="profile-icon-input">Profile Icon (optional)</label>
+          <input type="file" id="profile-icon-input" accept="image/*,.heic,.heif" onchange="previewProfileIcon(event)" />
+          <img id="profile-icon-preview" class="image-preview" alt="Profile icon preview" />
+        </div>
+
+        <button type="submit" class="btn btn-blue">Save Changes</button>
+      </form>
+    </div>
+
+    <!-- Bottom Navigation Bar (Home, Inventory, Add, History, Profile) -->
+    <div class="bottom-nav">
+      <a href="home.html" class="nav-item">
+        <span class="nav-icon">&#127968;</span>
+        <span>Home</span>
+      </a>
+      <a href="inventory.html" class="nav-item">
+        <span class="nav-icon">&#128230;</span>
+        <span>Inventory</span>
+      </a>
+      <a href="add.html" class="nav-item">
+        <span class="nav-icon">+</span>
+        <span>Add</span>
+      </a>
+      <a href="history.html" class="nav-item">
+        <span class="nav-icon">&#128339;</span>
+        <span>History</span>
+      </a>
+      <a href="profile.html" class="nav-item active">
+        <span class="nav-icon">&#128100;</span>
+        <span>Profile</span>
+      </a>
+    </div>
+
+    <!-- Hamburger Side Menu -->
+    <div id="side-menu-overlay" class="menu-overlay" onclick="toggleMenu()">
+      <div class="side-menu" onclick="event.stopPropagation()">
+        <div>
+          <button type="button" class="close-menu-btn" onclick="toggleMenu()">&times;</button>
+          <p class="menu-title">Menu</p>
+          <div class="menu-links">
+            <a href="home.html" class="menu-link">&#127968; Home</a>
+            <a href="inventory.html" class="menu-link">&#128230; Inventory</a>
+            <a href="add.html" class="menu-link">&#10133; Add Product</a>
+            <a href="history.html" class="menu-link">&#128339; History</a>
+            <a href="profile.html" class="menu-link">&#128100; Profile Settings</a>
+          </div>
+        </div>
+        <button type="button" id="logout-btn" class="btn btn-gray" onclick="handleLogout()">Logout</button>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
+  <script src="../js/app.js"></script>
+</body>
+</html>

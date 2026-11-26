@@ -1,33 +1,33 @@
-const CACHE_NAME = 'skit-production-v2';
-const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/env.js',
-  '/assets/icons/icon-192.png',
-  '/assets/icons/icon-512.png',
-  '/assets/icons/icon.svg',
-  '/assets/icons/favicon.png',
-  '/assets/images/shelf_illustration.png',
-  '/assets/images/viewfinder_bg.png',
-  '/js/supabase.js',
-  '/js/app.js'
+var CACHE_NAME = "skit-shop-v1";
+var FILES_TO_CACHE = [
+  "/",
+  "/index.html",
+  "/css/style.css",
+  "/js/app.js",
+  "/pages/login.html",
+  "/pages/signup.html",
+  "/pages/home.html",
+  "/pages/inventory.html",
+  "/pages/add.html",
+  "/pages/history.html",
+  "/pages/profile.html",
+  "/icons/icon.svg"
 ];
 
-self.addEventListener('install', (event) => {
+self.addEventListener("install", function (event) {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
+    caches.open(CACHE_NAME).then(function (cache) {
+      return cache.addAll(FILES_TO_CACHE);
     })
   );
   self.skipWaiting();
 });
 
-self.addEventListener('activate', (event) => {
+self.addEventListener("activate", function (event) {
   event.waitUntil(
-    caches.keys().then((keys) => {
+    caches.keys().then(function (keys) {
       return Promise.all(
-        keys.map((key) => {
+        keys.map(function (key) {
           if (key !== CACHE_NAME) {
             return caches.delete(key);
           }
@@ -38,36 +38,22 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-self.addEventListener('fetch', (event) => {
-  // Do not cache API routes
-  if (event.request.url.includes('/api/')) {
+self.addEventListener("fetch", function (event) {
+  if (event.request.method !== "GET") {
     return;
   }
 
-  // Navigation fallback to /index.html for SPA routes
-  if (event.request.mode === 'navigate') {
-    event.respondWith(
-      fetch(event.request).catch(() => caches.match('/index.html'))
-    );
+  // Always fetch .env.local and Supabase API calls fresh from network
+  if (
+    event.request.url.indexOf(".env.local") !== -1 ||
+    event.request.url.indexOf("supabase.co") !== -1
+  ) {
     return;
   }
 
-  // Stale-while-revalidate for static assets
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      const fetchPromise = fetch(event.request)
-        .then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
-            const responseToCache = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, responseToCache);
-            });
-          }
-          return networkResponse;
-        })
-        .catch(() => cachedResponse);
-
-      return cachedResponse || fetchPromise;
+    fetch(event.request).catch(function () {
+      return caches.match(event.request);
     })
   );
 });
