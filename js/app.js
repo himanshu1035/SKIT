@@ -190,15 +190,18 @@ function toggleMenu() {
   }
 }
 
-// Show or hide password
+// Show or hide password with eye icon
+var EYE_OPEN_SVG = "<svg width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0'/><circle cx='12' cy='12' r='3'/></svg>";
+var EYE_OFF_SVG = "<svg width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49'/><path d='M14.084 14.158a3 3 0 0 1-4.242-4.242'/><path d='M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143'/><path d='m2 2 20 20'/></svg>";
+
 function togglePassword(inputId, btn) {
   var input = document.getElementById(inputId);
   if (input.type === "password") {
     input.type = "text";
-    btn.innerText = "Hide";
+    btn.innerHTML = EYE_OFF_SVG;
   } else {
     input.type = "password";
-    btn.innerText = "Show";
+    btn.innerHTML = EYE_OPEN_SVG;
   }
 }
 
@@ -430,14 +433,36 @@ var selectedProfileIcon = "";
 function previewProfileIcon(event) {
   var file = event.target.files[0];
   var preview = document.getElementById("profile-icon-preview");
-  if (!file || !preview) return;
+  if (!file) return;
 
   compressImageFile(file, function (compressedData) {
     if (!isSafeImageDataUrl(compressedData)) return;
     selectedProfileIcon = compressedData;
-    preview.src = compressedData;
-    preview.style.display = "block";
+    if (preview) {
+      preview.src = compressedData;
+    }
+    var largeAvatar = document.getElementById("profile-avatar-lg");
+    if (largeAvatar) {
+      largeAvatar.textContent = "";
+      var img = document.createElement("img");
+      img.src = compressedData;
+      img.alt = "Profile";
+      largeAvatar.appendChild(img);
+    }
   });
+}
+
+function setAvatarElement(el, shopName, profileIcon) {
+  if (!el) return;
+  el.textContent = "";
+  if (isSafeImageDataUrl(profileIcon)) {
+    var img = document.createElement("img");
+    img.src = profileIcon;
+    img.alt = "Profile";
+    el.appendChild(img);
+  } else if (shopName) {
+    el.innerText = shopName.charAt(0).toUpperCase();
+  }
 }
 
 function renderTopBarProfile(shopName, profileIcon) {
@@ -446,18 +471,14 @@ function renderTopBarProfile(shopName, profileIcon) {
     topShopName.innerText = shopName || "";
   }
 
-  var profileBtn = document.getElementById("profile-btn");
-  if (profileBtn) {
-    profileBtn.textContent = "";
-    if (isSafeImageDataUrl(profileIcon)) {
-      var img = document.createElement("img");
-      img.src = profileIcon;
-      img.alt = "Profile";
-      profileBtn.appendChild(img);
-    } else if (shopName) {
-      profileBtn.innerText = shopName.charAt(0).toUpperCase();
-    }
+  var drawerShopName = document.getElementById("drawer-shop-name");
+  if (drawerShopName) {
+    drawerShopName.innerText = shopName || "";
   }
+
+  setAvatarElement(document.getElementById("profile-btn"), shopName, profileIcon);
+  setAvatarElement(document.getElementById("drawer-avatar"), shopName, profileIcon);
+  setAvatarElement(document.getElementById("profile-avatar-lg"), shopName, profileIcon);
 }
 
 function applyUserInfoToUI(userData) {
@@ -834,7 +855,144 @@ function getThumbHtml(imageData) {
   if (isSafeImageDataUrl(imageData)) {
     return "<img src='" + imageData + "' class='item-thumb' alt='Product' />";
   }
-  return "<div class='item-thumb'></div>";
+  return "<div class='item-thumb-placeholder' aria-hidden='true'><svg width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'><path d='M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z'/><path d='M12 22V12'/><path d='m3.3 7 7.703 4.734a2 2 0 0 0 1.994 0L20.7 7'/></svg></div>";
+}
+
+// Date & time formatting ("27 Nov 2026", "Today", "Tomorrow", "8:09 PM")
+var SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function formatDateObj(d) {
+  return d.getDate() + " " + SHORT_MONTHS[d.getMonth()] + " " + d.getFullYear();
+}
+
+function formatDisplayDate(dateStr) {
+  if (!dateStr) return "";
+  var d = new Date(dateStr + "T00:00:00");
+  if (isNaN(d.getTime())) return dateStr;
+
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
+  var diffDays = Math.round((d - today) / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Tomorrow";
+  if (diffDays === -1) return "Yesterday";
+  return formatDateObj(d);
+}
+
+function formatDisplayTime(isoStr) {
+  if (!isoStr) return "";
+  var d = new Date(isoStr);
+  if (isNaN(d.getTime())) return "";
+  var hours = d.getHours();
+  var mins = d.getMinutes();
+  var ampm = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12;
+  if (hours === 0) hours = 12;
+  return hours + ":" + (mins < 10 ? "0" + mins : mins) + " " + ampm;
+}
+
+function getExpiryMeta(expiryDateStr) {
+  if (!expiryDateStr) return { label: "", urgencyClass: "urgency-ok" };
+  var d = new Date(expiryDateStr + "T00:00:00");
+  if (isNaN(d.getTime())) return { label: expiryDateStr, urgencyClass: "urgency-ok" };
+
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
+  var diffDays = Math.round((d - today) / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) {
+    return { label: "Expired", urgencyClass: "urgency-danger" };
+  }
+  if (diffDays === 0) {
+    return { label: "Expires today", urgencyClass: "urgency-danger" };
+  }
+  if (diffDays === 1) {
+    return { label: "Expires tomorrow", urgencyClass: "urgency-warning" };
+  }
+  if (diffDays <= 7) {
+    return { label: "Expires in " + diffDays + "d", urgencyClass: "urgency-warning" };
+  }
+  return { label: formatDateObj(d), urgencyClass: "urgency-ok" };
+}
+
+function stepAddQty(delta) {
+  var qtyInput = document.getElementById("item-quantity");
+  if (!qtyInput) return;
+  var val = Number(qtyInput.value) + delta;
+  if (isNaN(val) || val < 1) val = 1;
+  qtyInput.value = val;
+}
+
+function updateFilterChipCounts(barId, items) {
+  var bar = document.getElementById(barId);
+  if (!bar) return;
+  var counts = { all: items.length, instock: 0, nearexpire: 0, lowstock: 0, outofstock: 0 };
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i];
+    if (it.quantity > 0) {
+      counts.instock++;
+      if (isNearExpire(it.expiry_date)) counts.nearexpire++;
+      if (it.quantity <= 5) counts.lowstock++;
+    } else {
+      counts.outofstock++;
+    }
+  }
+  var badges = bar.querySelectorAll("[data-count-for]");
+  for (var j = 0; j < badges.length; j++) {
+    var key = badges[j].getAttribute("data-count-for");
+    if (typeof counts[key] === "number") {
+      badges[j].innerText = counts[key];
+    }
+  }
+}
+
+var toastTimer = null;
+function showToast(message, actionLabel, onAction) {
+  var toast = document.getElementById("app-toast");
+  var msgEl = document.getElementById("app-toast-msg");
+  var actEl = document.getElementById("app-toast-action");
+  if (!toast || !msgEl) return;
+
+  msgEl.innerText = message;
+  if (actEl) {
+    if (actionLabel && typeof onAction === "function") {
+      actEl.innerText = actionLabel;
+      actEl.style.display = "inline-block";
+      actEl.onclick = function () {
+        toast.classList.remove("show");
+        onAction();
+      };
+    } else {
+      actEl.style.display = "none";
+      actEl.onclick = null;
+    }
+  }
+
+  toast.classList.add("show");
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () {
+    toast.classList.remove("show");
+  }, 4500);
+}
+
+function animateStatNumber(el, target) {
+  if (!el) return;
+  var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduced || target <= 0) {
+    el.innerText = target;
+    return;
+  }
+  var start = 0;
+  var duration = 350;
+  var startTime = performance.now();
+  function tick(now) {
+    var progress = Math.min(1, (now - startTime) / duration);
+    var eased = 1 - Math.pow(1 - progress, 3);
+    el.innerText = Math.round(start + (target - start) * eased);
+    if (progress < 1) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
 }
 
 // Helper to set active filter button
@@ -904,8 +1062,9 @@ function applyHomeDashboardData(items) {
     }
   }
 
-  totalEl.innerText = allHomeItems.length;
-  nearEl.innerText = nearCount;
+  animateStatNumber(totalEl, allHomeItems.length);
+  animateStatNumber(nearEl, nearCount);
+  updateFilterChipCounts("home-filter-bar", allHomeItems);
   filterHomeItems();
 }
 
@@ -959,7 +1118,12 @@ function renderHomeItems(items) {
   if (!listEl) return;
 
   if (items.length === 0) {
-    listEl.innerHTML = "<p class='empty-text'>No matching items found</p>";
+    listEl.innerHTML =
+      "<div class='empty-state'>" +
+        "<div class='empty-state-icon' aria-hidden='true'><svg width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z'/><path d='M12 22V12'/><path d='m3.3 7 7.703 4.734a2 2 0 0 0 1.994 0L20.7 7'/></svg></div>" +
+        "<p class='empty-state-title'>No matching items</p>" +
+        "<p class='empty-text'>Try a different search or filter chip</p>" +
+      "</div>";
     return;
   }
 
@@ -967,27 +1131,39 @@ function renderHomeItems(items) {
   for (var j = 0; j < items.length; j++) {
     var item = items[j];
     var itemId = Number(item.id);
-    var stockBadge = item.quantity <= 0
-      ? "<span class='out-of-stock'>Out of Stock</span>"
-      : "<p>Left: <strong>" + Number(item.quantity) + "</strong></p>";
+    var qty = Number(item.quantity);
+    var statusBadge = "";
+    if (qty <= 0) {
+      statusBadge = "<span class='status-badge status-danger'>Out of Stock</span>";
+    } else if (qty <= 5) {
+      statusBadge = "<span class='status-badge status-low'>Low Stock</span>";
+    } else {
+      statusBadge = "<span class='status-badge status-instock'>In Stock</span>";
+    }
 
-    var expireBadge = isNearExpire(item.expiry_date)
-      ? "<span class='near-expire'>Near Expire</span>"
+    var expireMeta = getExpiryMeta(item.expiry_date);
+    var expireBadge = (qty > 0 && isNearExpire(item.expiry_date))
+      ? "<span class='status-badge status-warning'>Near Expire</span>"
       : "";
 
     var descText = item.description
       ? "<p class='item-desc'>" + escapeHtml(item.description) + "</p>"
       : "";
 
+    var delay = Math.min(j, 8) * 35;
+
     html +=
-      "<div class='item-card clickable-card' onclick=\"window.location.href='inventory.html?edit=" + itemId + "'\">" +
+      "<div class='item-card clickable-card' style='animation-delay:" + delay + "ms' onclick=\"window.location.href='inventory.html?edit=" + itemId + "'\">" +
         getThumbHtml(item.image_data) +
         "<div class='item-info'>" +
           "<p class='item-name'>" + escapeHtml(item.item_name) + "</p>" +
-          stockBadge +
-          expireBadge +
+          "<div class='item-badges'>" +
+            "<span class='qty-pill'>" + qty + " left</span>" +
+            statusBadge +
+            expireBadge +
+          "</div>" +
           descText +
-          "<p>Expiry: " + escapeHtml(item.expiry_date) + "</p>" +
+          "<p class='expiry-line'><span class='expiry-urgency " + expireMeta.urgencyClass + "'>" + escapeHtml(expireMeta.label) + "</span></p>" +
         "</div>" +
       "</div>";
   }
@@ -1047,6 +1223,7 @@ function setInventoryFilter(filterType, btn) {
 function filterInventory() {
   var searchEl = document.getElementById("inventory-search");
   var query = searchEl ? searchEl.value.trim().toLowerCase() : "";
+  updateFilterChipCounts("inventory-filter-bar", allInventoryItems);
   var filtered = filterByStockAndSearch(allInventoryItems, query, currentInventoryFilter);
   renderInventory(filtered);
 }
@@ -1056,7 +1233,12 @@ function renderInventory(items) {
   if (!listEl) return;
 
   if (items.length === 0) {
-    listEl.innerHTML = "<p class='empty-text'>No products found</p>";
+    listEl.innerHTML =
+      "<div class='empty-state'>" +
+        "<div class='empty-state-icon' aria-hidden='true'><svg width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z'/><path d='M12 22V12'/><path d='m3.3 7 7.703 4.734a2 2 0 0 0 1.994 0L20.7 7'/></svg></div>" +
+        "<p class='empty-state-title'>No products found</p>" +
+        "<p class='empty-text'>Add a new batch or change your filter</p>" +
+      "</div>";
     return;
   }
 
@@ -1064,33 +1246,45 @@ function renderInventory(items) {
   for (var i = 0; i < items.length; i++) {
     var item = items[i];
     var itemId = Number(item.id);
-    var stockBadge = item.quantity <= 0
-      ? "<span class='out-of-stock'>Out of Stock</span>"
-      : "<p>Left: <strong>" + Number(item.quantity) + "</strong></p>";
+    var qty = Number(item.quantity);
+    var statusClass = "status-instock";
+    var statusLabel = "In Stock";
+    if (qty <= 0) {
+      statusClass = "status-danger";
+      statusLabel = "Out of Stock";
+    } else if (isNearExpire(item.expiry_date)) {
+      statusClass = "status-warning";
+      statusLabel = "Near Expire";
+    } else if (qty <= 5) {
+      statusClass = "status-low";
+      statusLabel = "Low Stock";
+    }
 
-    var expireBadge = isNearExpire(item.expiry_date)
-      ? "<span class='near-expire'>Near Expire</span>"
-      : "";
+    var expireMeta = getExpiryMeta(item.expiry_date);
 
-    var actionButtons = item.quantity <= 0
-      ? "<button type='button' class='mini-btn red' onclick='deleteItem(" + itemId + ")'>Delete</button>"
-      : "<button type='button' class='sold-btn' onclick='openSoldPopup(" + itemId + ")'>Sold</button>" +
-        "<button type='button' class='mini-btn blue' onclick='openEditBox(" + itemId + ")'>Edit</button>";
+    var actionButtons = qty <= 0
+      ? "<button type='button' class='mini-btn red' onclick='deleteItem(" + itemId + ")'><svg width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M3 6h18'/><path d='M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6'/><path d='M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2'/></svg><span>Delete</span></button>"
+      : "<button type='button' class='sold-btn' onclick='openSoldPopup(" + itemId + ")'><svg width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M20 6 9 17l-5-5'/></svg><span>Sold</span></button>" +
+        "<button type='button' class='mini-btn blue' onclick='openEditBox(" + itemId + ")'><svg width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7'/><path d='M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z'/></svg><span>Edit</span></button>";
 
     var descText = item.description
       ? "<p class='item-desc'>" + escapeHtml(item.description) + "</p>"
       : "";
 
+    var delay = Math.min(i, 8) * 35;
+
     html +=
-      "<div class='item-card-wrap'>" +
+      "<div class='item-card-wrap " + statusClass + "' style='animation-delay:" + delay + "ms'>" +
         "<div class='item-card-top'>" +
           getThumbHtml(item.image_data) +
           "<div class='item-info'>" +
             "<p class='item-name'>" + escapeHtml(item.item_name) + "</p>" +
-            stockBadge +
-            expireBadge +
+            "<div class='item-badges'>" +
+              "<span class='qty-pill'>" + qty + " left</span>" +
+              "<span class='status-badge " + statusClass + "'>" + statusLabel + "</span>" +
+            "</div>" +
             descText +
-            "<p>Expiry: " + escapeHtml(item.expiry_date) + "</p>" +
+            "<p class='expiry-line'><span class='expiry-urgency " + expireMeta.urgencyClass + "'>" + escapeHtml(expireMeta.label) + "</span></p>" +
           "</div>" +
         "</div>" +
         "<div class='item-actions'>" +
@@ -1137,12 +1331,21 @@ async function changeQty(itemId, delta) {
   }
 
   var updatedQty = typeof res.data === "number" ? res.data : newQty;
+  var prevQty = item.quantity;
   item.quantity = updatedQty;
   var keySuffix = token.slice(0, 16);
   setSessionCache("skit_batches_" + keySuffix, allInventoryItems);
   removeSessionCache("skit_history_" + keySuffix);
-  document.getElementById("inventory-msg").innerText = "Updated " + item.item_name + " (" + updatedQty + " left)";
   filterInventory();
+
+  if (delta < 0 && prevQty > updatedQty) {
+    var soldAmount = prevQty - updatedQty;
+    showToast("Marked " + soldAmount + " sold · " + item.item_name, "Undo", function () {
+      changeQty(itemId, soldAmount);
+    });
+  } else if (delta > 0) {
+    showToast("Restored " + item.item_name + " (" + updatedQty + " left)");
+  }
 }
 
 async function markAllSold(itemId) {
@@ -1426,29 +1629,65 @@ function renderHistory(items) {
   if (!listEl) return;
 
   if (items.length === 0) {
-    listEl.innerHTML = "<p class='empty-text'>No history found</p>";
+    listEl.innerHTML =
+      "<div class='empty-state'>" +
+        "<div class='empty-state-icon' aria-hidden='true'><svg width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><polyline points='12 6 12 12 16 14'/></svg></div>" +
+        "<p class='empty-state-title'>No history yet</p>" +
+        "<p class='empty-text'>Stock additions and sales appear here</p>" +
+      "</div>";
     return;
   }
 
-  var html = "";
+  var groups = [];
+  var groupMap = {};
   for (var i = 0; i < items.length; i++) {
     var row = items[i];
-    var qtyChanged = Number(row.quantity_changed) || 0;
-    var badge = row.action_type === "added"
-      ? "<span class='badge-added'>Added +" + qtyChanged + "</span>"
-      : "<span class='badge-sold'>Sold -" + qtyChanged + "</span>";
+    var dateKey = "Earlier";
+    if (row.created_at) {
+      var d = new Date(row.created_at);
+      if (!isNaN(d.getTime())) {
+        var yyyy = d.getFullYear();
+        var mm = String(d.getMonth() + 1).padStart(2, "0");
+        var dd = String(d.getDate()).padStart(2, "0");
+        dateKey = formatDisplayDate(yyyy + "-" + mm + "-" + dd);
+      }
+    }
+    if (!groupMap[dateKey]) {
+      groupMap[dateKey] = [];
+      groups.push({ title: dateKey, rows: groupMap[dateKey] });
+    }
+    groupMap[dateKey].push(row);
+  }
 
-    var dateText = row.created_at ? new Date(row.created_at).toLocaleString() : "";
+  var html = "";
+  var cardIdx = 0;
+  for (var g = 0; g < groups.length; g++) {
+    var group = groups[g];
+    html += "<div class='timeline-group'><p class='timeline-heading'>" + escapeHtml(group.title) + "</p><div class='timeline-list'>";
 
-    html +=
-      "<div class='item-card'>" +
-      getThumbHtml(row.image_data) +
-      "<div class='item-info'>" +
-      "<p class='item-name'>" + escapeHtml(row.item_name) + "</p>" +
-      badge +
-      "<p>" + escapeHtml(dateText) + "</p>" +
-      "</div>" +
-      "</div>";
+    for (var k = 0; k < group.rows.length; k++) {
+      var item = group.rows[k];
+      var qtyChanged = Number(item.quantity_changed) || 0;
+      var isAdded = item.action_type === "added";
+      var badge = isAdded
+        ? "<span class='badge-added'><svg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14'/><path d='M12 5v14'/></svg><span>Added +" + qtyChanged + "</span></span>"
+        : "<span class='badge-sold'><svg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14'/></svg><span>Sold " + qtyChanged + "</span></span>";
+
+      var timeText = formatDisplayTime(item.created_at);
+      var delay = Math.min(cardIdx++, 8) * 35;
+
+      html +=
+        "<div class='item-card timeline-item " + (isAdded ? "is-added" : "is-sold") + "' style='animation-delay:" + delay + "ms'>" +
+          getThumbHtml(item.image_data) +
+          "<div class='item-info'>" +
+            "<p class='item-name'>" + escapeHtml(item.item_name) + "</p>" +
+            badge +
+            (timeText ? "<p class='history-meta'>" + escapeHtml(timeText) + "</p>" : "") +
+          "</div>" +
+        "</div>";
+    }
+
+    html += "</div></div>";
   }
 
   listEl.innerHTML = html;

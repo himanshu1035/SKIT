@@ -1,8 +1,8 @@
-var CACHE_NAME = "skit-shop-v9";
+var CACHE_NAME = "skit-shop-v10";
 var FILES_TO_CACHE = [
   "/",
   "/index.html",
-  "/css/style.css",
+  "/css/theme.css",
   "/js/supabase.min.js",
   "/js/app.js",
   "/pages/login.html",
