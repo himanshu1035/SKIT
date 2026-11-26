@@ -1,4 +1,4 @@
-var CACHE_NAME = "skit-shop-v10";
+var CACHE_NAME = "skit-shop-v11";
 var FILES_TO_CACHE = [
   "/",
   "/index.html",
