@@ -3,6 +3,7 @@
   padding: 0;
   box-sizing: border-box;
   font-family: Arial, sans-serif;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
@@ -11,6 +12,7 @@ body {
   justify-content: center;
   align-items: center;
   min-height: 100vh;
+  overscroll-behavior: none;
 }
 
 /* Responsive app container that adapts to any device */
@@ -174,7 +176,7 @@ textarea {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 14px 16px;
+  padding: max(14px, env(safe-area-inset-top)) 16px 14px 16px;
   border-bottom: 1px solid #dddddd;
   background-color: #ffffff;
 }
@@ -247,6 +249,7 @@ textarea {
   flex: 1;
   padding: 18px;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Four empty rectangle boxes */
@@ -269,6 +272,8 @@ textarea {
   display: flex;
   border-top: 1px solid #dddddd;
   background-color: #ffffff;
+  padding-bottom: env(safe-area-inset-bottom);
+  user-select: none;
 }
 
 .nav-item {

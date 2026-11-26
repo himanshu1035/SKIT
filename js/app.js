@@ -657,6 +657,7 @@ function closeCamera(mode) {
 
 // Store compressed product image as base64 text
 var selectedProductImage = "";
+var isImageCompressing = false;
 
 function previewProductImage(event) {
   var file = event.target.files[0];
@@ -664,13 +665,16 @@ function previewProductImage(event) {
 
   if (!file) {
     selectedProductImage = "";
+    isImageCompressing = false;
     preview.style.display = "none";
     preview.src = "";
     return;
   }
 
+  isImageCompressing = true;
   compressImageFile(file, function (compressedData) {
     selectedProductImage = compressedData;
+    isImageCompressing = false;
     preview.src = compressedData;
     preview.style.display = "block";
   });
@@ -725,30 +729,51 @@ async function handleAddProduct(event) {
     return;
   }
 
+  if (isImageCompressing) {
+    document.getElementById("add-main-error").innerText = "Please wait, image is still loading...";
+    var areaWait = document.querySelector(".main-area");
+    if (areaWait) areaWait.scrollTop = 0;
+    return;
+  }
+
   setButtonLoading("add-product-form", true, "Saving...", "Add Product");
 
   var client = await connectDatabase();
   if (client === null) {
     setButtonLoading("add-product-form", false, "Saving...", "Add Product");
     document.getElementById("add-main-error").innerText = "Database not connected";
+    var areaDb = document.querySelector(".main-area");
+    if (areaDb) areaDb.scrollTop = 0;
     return;
   }
 
   var mobile = getLoggedInCookie();
-  var insertRes = await client
-    .from("product_batches")
-    .insert([
-      {
-        shop_mobile: mobile,
-        item_name: itemName,
-        quantity: Number(quantity),
-        expiry_date: expiryDate,
-        description: itemDesc,
-        image_data: selectedProductImage
-      }
-    ]);
+  if (!mobile) {
+    window.location.href = "login.html";
+    return;
+  }
+
+  var newBatch = {
+    shop_mobile: mobile,
+    item_name: itemName,
+    quantity: Number(quantity),
+    expiry_date: expiryDate,
+    description: itemDesc,
+    image_data: selectedProductImage
+  };
+
+  var insertRes = await client.from("product_batches").insert([newBatch]);
+
+  // Fallback if description column was not added in Supabase yet
+  if (insertRes.error && insertRes.error.message.indexOf("description") !== -1) {
+    delete newBatch.description;
+    insertRes = await client.from("product_batches").insert([newBatch]);
+  }
 
   setButtonLoading("add-product-form", false, "Saving...", "Add Product");
+
+  var mainArea = document.querySelector(".main-area");
+  if (mainArea) mainArea.scrollTop = 0;
 
   if (insertRes.error) {
     document.getElementById("add-main-error").innerText = "Database error: " + insertRes.error.message;
