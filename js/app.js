@@ -13,9 +13,48 @@ function isInPagesFolder() {
   return window.location.pathname.indexOf("/pages/") !== -1;
 }
 
-// Read SUPABASE_URL and SUPABASE_ANON_KEY from js/env.json (Vercel) or .env.local (local)
+// Session cache helpers for stale-while-revalidate reads
+function getSessionCache(key) {
+  try {
+    var raw = sessionStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+function setSessionCache(key, value) {
+  try {
+    sessionStorage.setItem(key, JSON.stringify(value));
+  } catch (err) {
+    // Ignore storage quota errors
+  }
+}
+
+function removeSessionCache(key) {
+  try {
+    sessionStorage.removeItem(key);
+  } catch (err) {
+    // Ignore
+  }
+}
+
+function clearUserSessionCache(mobile) {
+  if (!mobile) return;
+  removeSessionCache("skit_user_" + mobile);
+  removeSessionCache("skit_batches_" + mobile);
+  removeSessionCache("skit_history_" + mobile);
+}
+
+// Read SUPABASE_URL and SUPABASE_ANON_KEY from sessionStorage, js/env.json (Vercel), or .env.local (local)
 async function connectDatabase() {
   if (db !== null) {
+    return db;
+  }
+
+  var cachedConfig = getSessionCache("skit_db_config");
+  if (cachedConfig && cachedConfig.url && cachedConfig.key && window.supabase) {
+    db = window.supabase.createClient(cachedConfig.url, cachedConfig.key);
     return db;
   }
 
@@ -63,6 +102,7 @@ async function connectDatabase() {
     return null;
   }
 
+  setSessionCache("skit_db_config", { url: url, key: key });
   db = window.supabase.createClient(url, key);
   return db;
 }
@@ -224,7 +264,7 @@ async function handleLogin(event) {
 
   var result = await client
     .from("user_details")
-    .select("*")
+    .select("mobile, shop_name, profile_icon")
     .eq("mobile", mobile)
     .eq("password", password)
     .maybeSingle();
@@ -241,8 +281,13 @@ async function handleLogin(event) {
     return;
   }
 
-  // Save cookie and login history in Supabase
+  // Save cookie, prime user cache, and save login history in Supabase
   setLoggedInCookie(result.data.mobile);
+  setSessionCache("skit_user_" + result.data.mobile, {
+    mobile: result.data.mobile,
+    shop_name: result.data.shop_name,
+    profile_icon: result.data.profile_icon || ""
+  });
   await saveLoginHistory(client, result.data.mobile, result.data.shop_name);
 
   window.location.href = "home.html";
@@ -355,6 +400,7 @@ async function handleLogout() {
       .eq("is_logged_in", true);
   }
 
+  clearUserSessionCache(mobile);
   clearLoggedInCookie();
   window.location.href = "login.html";
 }
@@ -389,8 +435,33 @@ function renderTopBarProfile(shopName, profileIcon) {
   }
 }
 
+function applyUserInfoToUI(userData) {
+  if (!userData) return;
+  var shopName = userData.shop_name;
+  selectedProfileIcon = userData.profile_icon || "";
+  renderTopBarProfile(shopName, selectedProfileIcon);
+
+  var profileShopInput = document.getElementById("profile-shop");
+  var profileMobileInput = document.getElementById("profile-mobile");
+  if (profileShopInput && profileMobileInput) {
+    profileShopInput.value = shopName;
+    profileMobileInput.value = userData.mobile;
+
+    var iconPreview = document.getElementById("profile-icon-preview");
+    if (iconPreview && selectedProfileIcon && selectedProfileIcon.indexOf("data:image") === 0) {
+      iconPreview.src = selectedProfileIcon;
+      iconPreview.style.display = "block";
+    }
+  }
+}
+
 // Load shop name and profile icon for top bar and profile form
 async function loadUserInfo(client, mobile) {
+  var cached = getSessionCache("skit_user_" + mobile);
+  if (cached) {
+    applyUserInfoToUI(cached);
+  }
+
   var res = await client
     .from("user_details")
     .select("mobile, shop_name, profile_icon")
@@ -401,22 +472,8 @@ async function loadUserInfo(client, mobile) {
     return;
   }
 
-  var shopName = res.data.shop_name;
-  selectedProfileIcon = res.data.profile_icon || "";
-  renderTopBarProfile(shopName, selectedProfileIcon);
-
-  var profileShopInput = document.getElementById("profile-shop");
-  var profileMobileInput = document.getElementById("profile-mobile");
-  if (profileShopInput && profileMobileInput) {
-    profileShopInput.value = shopName;
-    profileMobileInput.value = res.data.mobile;
-
-    var iconPreview = document.getElementById("profile-icon-preview");
-    if (iconPreview && selectedProfileIcon && selectedProfileIcon.indexOf("data:image") === 0) {
-      iconPreview.src = selectedProfileIcon;
-      iconPreview.style.display = "block";
-    }
-  }
+  setSessionCache("skit_user_" + mobile, res.data);
+  applyUserInfoToUI(res.data);
 }
 
 // Save updated profile details
@@ -494,29 +551,40 @@ async function handleProfileSave(event) {
     return;
   }
 
-  // Update active login_history row, product_batches, and cookie if mobile or shop name changed
-  await client
-    .from("login_history")
-    .update({
-      mobile: newMobile,
-      shop_name: newShop
-    })
-    .eq("mobile", currentMobile)
-    .eq("is_logged_in", true);
+  // Update active login_history row, product_batches, and product_history in parallel
+  var syncTasks = [
+    client
+      .from("login_history")
+      .update({
+        mobile: newMobile,
+        shop_name: newShop
+      })
+      .eq("mobile", currentMobile)
+      .eq("is_logged_in", true)
+  ];
 
   if (newMobile !== currentMobile) {
-    await client
-      .from("product_batches")
-      .update({ shop_mobile: newMobile })
-      .eq("shop_mobile", currentMobile);
-
-    await client
-      .from("product_history")
-      .update({ shop_mobile: newMobile })
-      .eq("shop_mobile", currentMobile);
+    syncTasks.push(
+      client
+        .from("product_batches")
+        .update({ shop_mobile: newMobile })
+        .eq("shop_mobile", currentMobile),
+      client
+        .from("product_history")
+        .update({ shop_mobile: newMobile })
+        .eq("shop_mobile", currentMobile)
+    );
+    clearUserSessionCache(currentMobile);
   }
 
+  await Promise.all(syncTasks);
+
   setLoggedInCookie(newMobile);
+  setSessionCache("skit_user_" + newMobile, {
+    mobile: newMobile,
+    shop_name: newShop,
+    profile_icon: selectedProfileIcon
+  });
   renderTopBarProfile(newShop, selectedProfileIcon);
   setButtonLoading("profile-form", false, "Saving...", "Save Changes");
   document.getElementById("profile-password").value = "";
@@ -780,6 +848,8 @@ async function handleAddProduct(event) {
     return;
   }
 
+  removeSessionCache("skit_batches_" + mobile);
+  removeSessionCache("skit_history_" + mobile);
   await saveProductHistory(client, mobile, itemName, "added", Number(quantity), selectedProductImage);
 
   document.getElementById("add-product-form").reset();
@@ -860,24 +930,12 @@ function isNearExpire(expiryDateStr) {
 var allHomeItems = [];
 var currentHomeFilter = "all";
 
-async function loadHomeDashboard(client, mobile) {
+function applyHomeDashboardData(items) {
   var totalEl = document.getElementById("home-total-items");
   var nearEl = document.getElementById("home-near-expire");
-  var listEl = document.getElementById("home-items-list");
-  if (!totalEl || !nearEl || !listEl) return;
+  if (!totalEl || !nearEl) return;
 
-  var res = await client
-    .from("product_batches")
-    .select("*")
-    .eq("shop_mobile", mobile)
-    .order("expiry_date", { ascending: true });
-
-  if (res.error) {
-    listEl.innerHTML = "<p class='empty-text'>Error loading items</p>";
-    return;
-  }
-
-  allHomeItems = res.data || [];
+  allHomeItems = items || [];
   var nearCount = 0;
 
   for (var i = 0; i < allHomeItems.length; i++) {
@@ -889,6 +947,37 @@ async function loadHomeDashboard(client, mobile) {
   totalEl.innerText = allHomeItems.length;
   nearEl.innerText = nearCount;
   filterHomeItems();
+}
+
+async function loadHomeDashboard(client, mobile) {
+  var totalEl = document.getElementById("home-total-items");
+  var nearEl = document.getElementById("home-near-expire");
+  var listEl = document.getElementById("home-items-list");
+  if (!totalEl || !nearEl || !listEl) return;
+
+  var cachedBatches = getSessionCache("skit_batches_" + mobile);
+  if (cachedBatches) {
+    applyHomeDashboardData(cachedBatches);
+  }
+
+  var res = await client
+    .from("product_batches")
+    .select("id, item_name, quantity, expiry_date, description, image_data")
+    .eq("shop_mobile", mobile)
+    .order("expiry_date", { ascending: true });
+
+  if (res.error) {
+    if (!cachedBatches) {
+      totalEl.innerText = "0";
+      nearEl.innerText = "0";
+      listEl.innerHTML = "<p class='empty-text'>Error loading items</p>";
+    }
+    return;
+  }
+
+  var data = res.data || [];
+  setSessionCache("skit_batches_" + mobile, data);
+  applyHomeDashboardData(data);
 }
 
 function setHomeFilter(filterType, btn) {
@@ -956,18 +1045,27 @@ async function loadInventory(client, mobile) {
   var listEl = document.getElementById("inventory-list");
   if (!listEl) return;
 
+  var cachedBatches = getSessionCache("skit_batches_" + mobile);
+  if (cachedBatches) {
+    allInventoryItems = cachedBatches;
+    filterInventory();
+  }
+
   var res = await client
     .from("product_batches")
-    .select("*")
+    .select("id, item_name, quantity, expiry_date, description, image_data")
     .eq("shop_mobile", mobile)
     .order("expiry_date", { ascending: true });
 
   if (res.error) {
-    listEl.innerHTML = "<p class='empty-text'>Error loading inventory</p>";
+    if (!cachedBatches) {
+      listEl.innerHTML = "<p class='empty-text'>Error loading inventory</p>";
+    }
     return;
   }
 
   allInventoryItems = res.data || [];
+  setSessionCache("skit_batches_" + mobile, allInventoryItems);
   filterInventory();
 
   // If redirected from Home item click (?edit=ID), open edit box automatically
@@ -1061,6 +1159,7 @@ async function changeQty(itemId, delta) {
   var client = await connectDatabase();
   if (!client) return;
 
+  var mobile = getLoggedInCookie();
   var res = await client
     .from("product_batches")
     .update({ quantity: newQty })
@@ -1068,11 +1167,14 @@ async function changeQty(itemId, delta) {
 
   if (res.error) return;
 
-  var action = delta > 0 ? "added" : "sold";
-  await saveProductHistory(client, getLoggedInCookie(), item.item_name, action, Math.abs(delta), item.image_data);
-
+  item.quantity = newQty;
+  setSessionCache("skit_batches_" + mobile, allInventoryItems);
+  removeSessionCache("skit_history_" + mobile);
   document.getElementById("inventory-msg").innerText = "Updated " + item.item_name + " (" + newQty + " left)";
-  await loadInventory(client, getLoggedInCookie());
+  filterInventory();
+
+  var action = delta > 0 ? "added" : "sold";
+  await saveProductHistory(client, mobile, item.item_name, action, Math.abs(delta), item.image_data);
 }
 
 async function markAllSold(itemId) {
@@ -1082,6 +1184,7 @@ async function markAllSold(itemId) {
   var client = await connectDatabase();
   if (!client) return;
 
+  var mobile = getLoggedInCookie();
   var soldQty = item.quantity;
   var res = await client
     .from("product_batches")
@@ -1090,16 +1193,20 @@ async function markAllSold(itemId) {
 
   if (res.error) return;
 
-  await saveProductHistory(client, getLoggedInCookie(), item.item_name, "sold", soldQty, item.image_data);
-
+  item.quantity = 0;
+  setSessionCache("skit_batches_" + mobile, allInventoryItems);
+  removeSessionCache("skit_history_" + mobile);
   document.getElementById("inventory-msg").innerText = item.item_name + " marked Out of Stock";
-  await loadInventory(client, getLoggedInCookie());
+  filterInventory();
+
+  await saveProductHistory(client, mobile, item.item_name, "sold", soldQty, item.image_data);
 }
 
 async function deleteItem(itemId) {
   var client = await connectDatabase();
   if (!client) return;
 
+  var mobile = getLoggedInCookie();
   var res = await client
     .from("product_batches")
     .delete()
@@ -1107,8 +1214,12 @@ async function deleteItem(itemId) {
 
   if (res.error) return;
 
+  allInventoryItems = allInventoryItems.filter(function (it) {
+    return it.id !== itemId;
+  });
+  setSessionCache("skit_batches_" + mobile, allInventoryItems);
   document.getElementById("inventory-msg").innerText = "Item deleted";
-  await loadInventory(client, getLoggedInCookie());
+  filterInventory();
 }
 
 function openEditBox(itemId) {
@@ -1229,15 +1340,31 @@ async function saveEditedItem() {
 
   if (res.error) return;
 
-  if (oldItem && newQty !== oldItem.quantity) {
-    var diff = newQty - oldItem.quantity;
-    var action = diff > 0 ? "added" : "sold";
-    await saveProductHistory(client, getLoggedInCookie(), newName, action, Math.abs(diff), editNewImage);
+  var mobile = getLoggedInCookie();
+  var oldQty = oldItem ? oldItem.quantity : newQty;
+  if (oldItem) {
+    oldItem.item_name = newName;
+    oldItem.quantity = newQty;
+    oldItem.expiry_date = newExpiry;
+    oldItem.description = newDesc;
+    oldItem.image_data = editNewImage;
   }
+
+  allInventoryItems.sort(function (a, b) {
+    return (a.expiry_date || "").localeCompare(b.expiry_date || "");
+  });
+  setSessionCache("skit_batches_" + mobile, allInventoryItems);
 
   closeEditBox();
   document.getElementById("inventory-msg").innerText = "Item updated";
-  await loadInventory(client, getLoggedInCookie());
+  filterInventory();
+
+  if (oldItem && newQty !== oldQty) {
+    var diff = newQty - oldQty;
+    var action = diff > 0 ? "added" : "sold";
+    removeSessionCache("skit_history_" + mobile);
+    await saveProductHistory(client, mobile, newName, action, Math.abs(diff), editNewImage);
+  }
 }
 
 // ==========================================================================
@@ -1251,18 +1378,28 @@ async function loadHistory(client, mobile) {
   var listEl = document.getElementById("history-list");
   if (!listEl) return;
 
+  var cachedHistory = getSessionCache("skit_history_" + mobile);
+  if (cachedHistory) {
+    allHistoryItems = cachedHistory;
+    filterHistory();
+  }
+
   var res = await client
     .from("product_history")
-    .select("*")
+    .select("id, item_name, action_type, quantity_changed, image_data, created_at")
     .eq("shop_mobile", mobile)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(100);
 
   if (res.error) {
-    listEl.innerHTML = "<p class='empty-text'>Error loading history</p>";
+    if (!cachedHistory) {
+      listEl.innerHTML = "<p class='empty-text'>Error loading history</p>";
+    }
     return;
   }
 
   allHistoryItems = res.data || [];
+  setSessionCache("skit_history_" + mobile, allHistoryItems);
   filterHistory();
 }
 
@@ -1335,7 +1472,7 @@ function renderHistory(items) {
 }
 
 // Keep user logged in until they press Logout
-window.onload = async function () {
+document.addEventListener("DOMContentLoaded", async function () {
   var mobile = getLoggedInCookie();
   var path = window.location.pathname;
   var onAppPage =
@@ -1395,4 +1532,4 @@ window.onload = async function () {
   if (!onAppPage) {
     window.location.href = isInPagesFolder() ? "home.html" : "pages/home.html";
   }
-};
+});

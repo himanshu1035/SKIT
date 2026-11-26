@@ -30,11 +30,11 @@
     <div class="main-area">
       <div class="box-grid">
         <div class="stat-box">
-          <div id="home-total-items" class="stat-number">0</div>
+          <div id="home-total-items" class="stat-number"><span class="skeleton skeleton-stat" aria-hidden="true"></span></div>
           <div class="stat-label">Total Items</div>
         </div>
         <div class="stat-box">
-          <div id="home-near-expire" class="stat-number">0</div>
+          <div id="home-near-expire" class="stat-number"><span class="skeleton skeleton-stat" aria-hidden="true"></span></div>
           <div class="stat-label">Near Expire (7d)</div>
         </div>
       </div>
@@ -55,7 +55,30 @@
         <button type="button" class="filter-btn" onclick="setHomeFilter('outofstock', this)">Out of Stock</button>
       </div>
       <div id="home-items-list" class="item-list">
-        <p class="empty-text">Loading</p>
+        <div class="item-card" aria-hidden="true">
+          <div class="skeleton skeleton-thumb"></div>
+          <div class="skeleton-lines">
+            <div class="skeleton skeleton-line w-60"></div>
+            <div class="skeleton skeleton-line w-30"></div>
+            <div class="skeleton skeleton-line w-40"></div>
+          </div>
+        </div>
+        <div class="item-card" aria-hidden="true">
+          <div class="skeleton skeleton-thumb"></div>
+          <div class="skeleton-lines">
+            <div class="skeleton skeleton-line w-60"></div>
+            <div class="skeleton skeleton-line w-30"></div>
+            <div class="skeleton skeleton-line w-40"></div>
+          </div>
+        </div>
+        <div class="item-card" aria-hidden="true">
+          <div class="skeleton skeleton-thumb"></div>
+          <div class="skeleton-lines">
+            <div class="skeleton skeleton-line w-60"></div>
+            <div class="skeleton skeleton-line w-30"></div>
+            <div class="skeleton skeleton-line w-40"></div>
+          </div>
+        </div>
       </div>
     </div>
 
