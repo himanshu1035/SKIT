@@ -1,4 +1,4 @@
-var CACHE_NAME = "skit-shop-v7";
+var CACHE_NAME = "skit-shop-v8";
 var FILES_TO_CACHE = [
   "/",
   "/index.html",
@@ -45,18 +45,25 @@ self.addEventListener("fetch", function (event) {
     return;
   }
 
-  // Always fetch config and Supabase API calls fresh from network
+  // Only handle same-origin requests; let external CDNs & Supabase bypass SW
+  var requestUrl = new URL(event.request.url);
+  if (requestUrl.origin !== self.location.origin) {
+    return;
+  }
+
+  // Always fetch config fresh from network
   if (
-    event.request.url.indexOf(".env.local") !== -1 ||
-    event.request.url.indexOf("env.json") !== -1 ||
-    event.request.url.indexOf("supabase.co") !== -1
+    requestUrl.pathname.indexOf(".env.local") !== -1 ||
+    requestUrl.pathname.indexOf("env.json") !== -1
   ) {
     return;
   }
 
   event.respondWith(
     fetch(event.request).catch(function () {
-      return caches.match(event.request);
+      return caches.match(event.request).then(function (cached) {
+        return cached || Response.error();
+      });
     })
   );
 });

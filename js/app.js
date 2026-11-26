@@ -101,7 +101,7 @@ async function connectDatabase() {
     }
   }
 
-  if (!url || !key || url.indexOf("your-project-id") !== -1) {
+  if (!url || !key || url.indexOf("your-project-id") !== -1 || !window.supabase) {
     return null;
   }
 
