@@ -306,6 +306,7 @@ async function handleLogin(event) {
   });
 
   if (result.error || !result.data || !result.data.session_token) {
+    if (result.error) console.error("auth_login error:", result.error);
     recordAuthFailure();
     setButtonLoading("login-form", false, "Logging in...", "Login");
     document.getElementById("login-main-error").innerText = getSafeErrorMessage(
@@ -382,6 +383,7 @@ async function handleSignup(event) {
   });
 
   if (result.error || !result.data || !result.data.session_token) {
+    if (result.error) console.error("auth_signup error:", result.error);
     recordAuthFailure();
     setButtonLoading("signup-form", false, "Signing up...", "Sign Up");
     document.getElementById("signup-main-error").innerText = getSafeErrorMessage(

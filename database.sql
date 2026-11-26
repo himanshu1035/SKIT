@@ -1,6 +1,7 @@
 -- Paste and run this SQL in your Supabase SQL Editor
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
+SET search_path TO public, extensions;
 
 -- 1. Tables & Constraints
 CREATE TABLE IF NOT EXISTS user_details (
@@ -588,3 +589,6 @@ GRANT EXECUTE ON FUNCTION update_batch_qty(TEXT, BIGINT, INTEGER) TO anon, authe
 GRANT EXECUTE ON FUNCTION edit_batch(TEXT, BIGINT, TEXT, INTEGER, DATE, TEXT, TEXT) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION delete_batch(TEXT, BIGINT) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION get_history(TEXT, INTEGER) TO anon, authenticated;
+
+-- Reload Supabase PostgREST schema cache so new RPCs are immediately callable
+NOTIFY pgrst, 'reload schema';
