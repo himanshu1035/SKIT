@@ -520,7 +520,7 @@ async function handleProfileSave(event) {
   renderTopBarProfile(newShop, selectedProfileIcon);
   setButtonLoading("profile-form", false, "Saving...", "Save Changes");
   document.getElementById("profile-password").value = "";
-  document.getElementById("profile-success").innerText = "Profile updated!";
+  document.getElementById("profile-success").innerText = "Profile updated";
 }
 
 // Compress an uploaded image file (supports .heic, .jpg, .png, etc.)
@@ -730,7 +730,7 @@ async function handleAddProduct(event) {
   }
 
   if (isImageCompressing) {
-    document.getElementById("add-main-error").innerText = "Please wait, image is still loading...";
+    document.getElementById("add-main-error").innerText = "Image is still processing";
     var areaWait = document.querySelector(".main-area");
     if (areaWait) areaWait.scrollTop = 0;
     return;
@@ -789,7 +789,7 @@ async function handleAddProduct(event) {
     preview.style.display = "none";
     preview.src = "";
   }
-  document.getElementById("add-success").innerText = "Product batch added!";
+  document.getElementById("add-success").innerText = "Product batch added";
 }
 
 // Escape HTML for safe display
@@ -873,7 +873,7 @@ async function loadHomeDashboard(client, mobile) {
     .order("expiry_date", { ascending: true });
 
   if (res.error) {
-    listEl.innerHTML = "<p class='empty-text'>Error loading items.</p>";
+    listEl.innerHTML = "<p class='empty-text'>Error loading items</p>";
     return;
   }
 
@@ -909,7 +909,7 @@ function renderHomeItems(items) {
   if (!listEl) return;
 
   if (items.length === 0) {
-    listEl.innerHTML = "<p class='empty-text'>No matching items found.</p>";
+    listEl.innerHTML = "<p class='empty-text'>No matching items found</p>";
     return;
   }
 
@@ -963,7 +963,7 @@ async function loadInventory(client, mobile) {
     .order("expiry_date", { ascending: true });
 
   if (res.error) {
-    listEl.innerHTML = "<p class='empty-text'>Error loading inventory.</p>";
+    listEl.innerHTML = "<p class='empty-text'>Error loading inventory</p>";
     return;
   }
 
@@ -996,7 +996,7 @@ function renderInventory(items) {
   if (!listEl) return;
 
   if (items.length === 0) {
-    listEl.innerHTML = "<p class='empty-text'>No products found.</p>";
+    listEl.innerHTML = "<p class='empty-text'>No products found</p>";
     return;
   }
 
@@ -1092,7 +1092,7 @@ async function markAllSold(itemId) {
 
   await saveProductHistory(client, getLoggedInCookie(), item.item_name, "sold", soldQty, item.image_data);
 
-  document.getElementById("inventory-msg").innerText = item.item_name + " marked Out of Stock!";
+  document.getElementById("inventory-msg").innerText = item.item_name + " marked Out of Stock";
   await loadInventory(client, getLoggedInCookie());
 }
 
@@ -1107,7 +1107,7 @@ async function deleteItem(itemId) {
 
   if (res.error) return;
 
-  document.getElementById("inventory-msg").innerText = "Item deleted!";
+  document.getElementById("inventory-msg").innerText = "Item deleted";
   await loadInventory(client, getLoggedInCookie());
 }
 
@@ -1236,7 +1236,7 @@ async function saveEditedItem() {
   }
 
   closeEditBox();
-  document.getElementById("inventory-msg").innerText = "Item updated!";
+  document.getElementById("inventory-msg").innerText = "Item updated";
   await loadInventory(client, getLoggedInCookie());
 }
 
@@ -1258,7 +1258,7 @@ async function loadHistory(client, mobile) {
     .order("created_at", { ascending: false });
 
   if (res.error) {
-    listEl.innerHTML = "<p class='empty-text'>Error loading history.</p>";
+    listEl.innerHTML = "<p class='empty-text'>Error loading history</p>";
     return;
   }
 
@@ -1307,7 +1307,7 @@ function renderHistory(items) {
   if (!listEl) return;
 
   if (items.length === 0) {
-    listEl.innerHTML = "<p class='empty-text'>No history found.</p>";
+    listEl.innerHTML = "<p class='empty-text'>No history found</p>";
     return;
   }
 

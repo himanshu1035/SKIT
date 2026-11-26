@@ -2,9 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#3b5998" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#fafafa" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>Inventory - SKIT Shop</title>
   <link rel="manifest" href="../manifest.json" />
   <link rel="apple-touch-icon" href="../icons/icon.svg" />
@@ -16,15 +17,16 @@
 
     <!-- Top Bar -->
     <div class="top-bar">
-      <button type="button" class="hamburger-btn" onclick="toggleMenu()">&#9776;</button>
+      <button type="button" class="hamburger-btn" aria-label="Open menu" onclick="toggleMenu()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="18" y2="18"/></svg>
+      </button>
       <span id="top-shop-name" class="top-shop-name"></span>
       <div class="top-right-icons">
-        <a href="history.html" class="top-icon-btn" title="History">&#128339;</a>
-        <a href="profile.html" id="profile-btn" class="profile-circle"></a>
+        <a href="profile.html" id="profile-btn" class="profile-circle" aria-label="Profile"></a>
       </div>
     </div>
 
-    <!-- Main Area: Search, Filter & Inventory List -->
+    <!-- Main Area -->
     <div class="main-area">
       <h2>Inventory</h2>
 
@@ -32,7 +34,7 @@
         type="text"
         id="inventory-search"
         class="search-bar"
-        placeholder="Search inventory..."
+        placeholder="Search"
         oninput="filterInventory()"
       />
 
@@ -47,30 +49,40 @@
       <p id="inventory-msg" class="success-msg"></p>
 
       <div id="inventory-list" class="item-list">
-        <p class="empty-text">Loading...</p>
+        <p class="empty-text">Loading</p>
       </div>
     </div>
 
-    <!-- Bottom Navigation Bar (Home, Inventory, Add, History, Profile) -->
+    <!-- Bottom Navigation Bar -->
     <div class="bottom-nav">
       <a href="home.html" class="nav-item">
-        <span class="nav-icon">&#127968;</span>
+        <span class="nav-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        </span>
         <span>Home</span>
       </a>
       <a href="inventory.html" class="nav-item active">
-        <span class="nav-icon">&#128230;</span>
+        <span class="nav-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 7.703 4.734a2 2 0 0 0 1.994 0L20.7 7"/></svg>
+        </span>
         <span>Inventory</span>
       </a>
       <a href="add.html" class="nav-item">
-        <span class="nav-icon">+</span>
+        <span class="nav-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+        </span>
         <span>Add</span>
       </a>
       <a href="history.html" class="nav-item">
-        <span class="nav-icon">&#128339;</span>
+        <span class="nav-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </span>
         <span>History</span>
       </a>
       <a href="profile.html" class="nav-item">
-        <span class="nav-icon">&#128100;</span>
+        <span class="nav-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </span>
         <span>Profile</span>
       </a>
     </div>
@@ -79,7 +91,7 @@
     <div id="sold-popup" class="popup-overlay" onclick="closeSoldPopup()">
       <div class="popup-box" onclick="event.stopPropagation()">
         <h3>Mark Sold</h3>
-        <p id="sold-popup-name" style="margin-bottom: 10px; font-weight: bold;"></p>
+        <p id="sold-popup-name" class="popup-subtitle"></p>
         <input type="hidden" id="sold-popup-id" />
         <div class="field">
           <label for="sold-popup-qty">Quantity Sold</label>
@@ -90,7 +102,7 @@
       </div>
     </div>
 
-    <!-- Edit Item Popup (Increase/Decrease Qty, Edit Name/Expiry/Photo, All Sold, Delete) -->
+    <!-- Edit Item Popup -->
     <div id="edit-popup" class="popup-overlay" onclick="closeEditBox()">
       <div class="popup-box" onclick="event.stopPropagation()">
         <h3>Edit Item</h3>
@@ -134,7 +146,7 @@
 
         <button type="button" class="btn btn-blue" onclick="saveEditedItem()">Save Changes</button>
         <button type="button" class="btn btn-gray" onclick="markAllSoldFromEdit()">All Sold</button>
-        <button type="button" class="btn btn-gray" style="color: red;" onclick="deleteFromEdit()">Delete Item</button>
+        <button type="button" class="btn btn-danger" onclick="deleteFromEdit()">Delete Item</button>
         <button type="button" class="btn btn-gray" onclick="closeEditBox()">Cancel</button>
       </div>
     </div>
@@ -143,14 +155,33 @@
     <div id="side-menu-overlay" class="menu-overlay" onclick="toggleMenu()">
       <div class="side-menu" onclick="event.stopPropagation()">
         <div>
-          <button type="button" class="close-menu-btn" onclick="toggleMenu()">&times;</button>
-          <p class="menu-title">Menu</p>
+          <div class="menu-header">
+            <p class="menu-title">Menu</p>
+            <button type="button" class="close-menu-btn" aria-label="Close menu" onclick="toggleMenu()">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+          </div>
           <div class="menu-links">
-            <a href="home.html" class="menu-link">&#127968; Home</a>
-            <a href="inventory.html" class="menu-link">&#128230; Inventory</a>
-            <a href="add.html" class="menu-link">&#10133; Add Product</a>
-            <a href="history.html" class="menu-link">&#128339; History</a>
-            <a href="profile.html" class="menu-link">&#128100; Profile Settings</a>
+            <a href="home.html" class="menu-link">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+              <span>Home</span>
+            </a>
+            <a href="inventory.html" class="menu-link">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 7.703 4.734a2 2 0 0 0 1.994 0L20.7 7"/></svg>
+              <span>Inventory</span>
+            </a>
+            <a href="add.html" class="menu-link">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+              <span>Add Product</span>
+            </a>
+            <a href="history.html" class="menu-link">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <span>History</span>
+            </a>
+            <a href="profile.html" class="menu-link">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <span>Profile Settings</span>
+            </a>
           </div>
         </div>
         <button type="button" id="logout-btn" class="btn btn-gray" onclick="handleLogout()">Logout</button>
